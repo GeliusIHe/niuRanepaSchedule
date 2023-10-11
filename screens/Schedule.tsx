@@ -1,4 +1,3 @@
-giimport * as React from "react";
 import { Text, StyleSheet, View, ScrollView } from "react-native";
 import { Image } from "expo-image";
 import TableSubheadings from "../components/TableSubheadings";
@@ -7,6 +6,7 @@ import HeaderTitleIcon from "../components/HeaderTitleIcon";
 import TabBar from "../components/TabBar";
 import { Color } from "../GlobalStyles";
 import {useEffect} from "react";
+import React from "react";
 type ScheduleItem = {
   kf: string;
   nf: string;
