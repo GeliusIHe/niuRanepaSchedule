@@ -1,4 +1,4 @@
-import * as React from "react";
+giimport * as React from "react";
 import { Text, StyleSheet, View, ScrollView } from "react-native";
 import { Image } from "expo-image";
 import TableSubheadings from "../components/TableSubheadings";
