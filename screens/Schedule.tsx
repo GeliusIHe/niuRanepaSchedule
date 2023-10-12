@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Text, StyleSheet, View, ScrollView } from "react-native";
+import {Text, StyleSheet, View, ScrollView, Button} from "react-native";
 import { Image } from "expo-image";
 import TableSubheadings from "../components/TableSubheadings";
 import LessonCard from "../components/LessonCard";
@@ -57,6 +57,9 @@ function getAddressAndRoom(room: string): { address: string, roomNumber: string 
 
 const Schedule = () => {
 
+  const scrollViewRef = React.useRef<ScrollView>(null);
+  const [isFetchingMore, setIsFetchingMore] = React.useState(false);
+  const [endDate, setEndDate] = React.useState(addDays(new Date(), 7));
 
   const [scheduleData, setScheduleData] = React.useState<ScheduleItem[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -85,6 +88,45 @@ const Schedule = () => {
       }
       return true;
     });
+  }
+
+  async function loadMoreData() {
+    const startDateForNextFetch = addDays(endDate, 1);  // начало загрузки - на следующий день после текущего endDate
+    const newEndDate = addDays(startDateForNextFetch, 6);  // конец загрузки - через 6 дней после начала загрузки
+    setEndDate(newEndDate);
+    setIsFetchingMore(true);
+
+    try {
+      const response = await fetch('http://services.niu.ranepa.ru/API/public/group/getSchedule', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: "18792",
+          dateBegin: formatDate(startDateForNextFetch),
+          dateEnd: formatDate(newEndDate)
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const newData = await response.json();
+      setScheduleData(prevData => [...prevData, ...newData]);
+
+      setTimeout(() => {
+        if (scrollViewRef.current && scrollViewRef.current.scrollToEnd) {
+          scrollViewRef.current.scrollToEnd({ animated: true });
+        }
+      }, 100);
+
+    } catch (error) {
+      console.error('Error fetching more schedule:', error);
+    } finally {
+      setIsFetchingMore(false);
+    }
   }
 
 
@@ -152,7 +194,11 @@ const Schedule = () => {
             headerTitleIconTop={44}
             headerTitleIconLeft="50%"
         />
-        <ScrollView style={{ marginTop: 86, marginBottom: 45 }}>
+        <ScrollView
+            ref={scrollViewRef}
+            style={{ marginTop: 86, marginBottom: 65 }}
+            onLayout={() => scrollViewRef.current?.scrollTo({ y: 10000, animated: true })}
+        >
           {Object.entries(groupedScheduleData).map(([date, lessonsForTheDay], index) => (
               <React.Fragment key={index}>
                 <TableSubheadings noteTitle={formatHumanReadableDate(date)} />
@@ -174,10 +220,11 @@ const Schedule = () => {
                 })}
               </React.Fragment>
           ))}
+          <Button title={isFetchingMore ? "Загрузка..." : "Загрузить еще"} onPress={loadMoreData} />
+
 
         </ScrollView>
 
-        <Text>Тыкнуть</Text>
 
         <TabBar
             imageDimensions={require("../assets/briefcase1.png")}
