@@ -24,7 +24,7 @@ const LessonCard = ({
   return (
     <View style={styles.lessoncard}>
       <View style={[styles.time, styles.timeSpaceBlock]}>
-        <Text style={[styles.text, styles.textTypo]}>{prop}</Text>
+        <Text style={[styles.text, styles.textTypo, styles.timeText]}>{prop}</Text>
         <Text style={[styles.text1, styles.text1Typo]}>{prop1}</Text>
       </View>
       <View style={[styles.description, styles.timeSpaceBlock]}>
@@ -46,6 +46,9 @@ const LessonCard = ({
 };
 
 const styles = StyleSheet.create({
+  timeText: {
+    marginTop: 25,
+  },
   timeSpaceBlock: {
     paddingHorizontal: Padding.p_xs,
     backgroundColor: Color.lightBackgroundPrimary,
@@ -102,7 +105,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   premedia: {
-    width: 194,
+    width: 300,
     textAlign: "left",
   },
   amount: {

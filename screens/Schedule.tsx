@@ -1,4 +1,4 @@
-giimport * as React from "react";
+import * as React from "react";
 import { Text, StyleSheet, View, ScrollView } from "react-native";
 import { Image } from "expo-image";
 import TableSubheadings from "../components/TableSubheadings";
@@ -74,6 +74,20 @@ const Schedule = () => {
     return `${dayOfWeek}, ${day} ${month}`;
   }
 
+  function filterDuplicatePhysicalEducation(lessons: ScheduleItem[]): ScheduleItem[] {
+    let isPhysicalEducationIncluded = false;
+    return lessons.filter(lesson => {
+      if (lesson.subject === 'Физическая культура') {
+        if (isPhysicalEducationIncluded) {
+          return false;
+        }
+        isPhysicalEducationIncluded = true;
+      }
+      return true;
+    });
+  }
+
+
 
   const formatDate = (date: Date): string => {
     const day = String(date.getDate()).padStart(2, '0');
@@ -108,7 +122,7 @@ const Schedule = () => {
         }
 
         const data = await response.json();
-        console.log('Data received from the server:', data);
+        console.log('Data received from the server');
         setScheduleData(data);
 
         setIsLoading(false);  // <-- Вот здесь
@@ -131,13 +145,18 @@ const Schedule = () => {
 
   return (
       <View style={styles.schedule}>
-        <ScrollView style={{ marginTop: 86 }}>
+        <HeaderTitleIcon
+            prop="Расписание"
+            headerTitleIconPosition="absolute"
+            headerTitleIconMarginLeft={-187.5}
+            headerTitleIconTop={44}
+            headerTitleIconLeft="50%"
+        />
+        <ScrollView style={{ marginTop: 86, marginBottom: 45 }}>
           {Object.entries(groupedScheduleData).map(([date, lessonsForTheDay], index) => (
               <React.Fragment key={index}>
-                <TableSubheadings
-                    noteTitle={formatHumanReadableDate(date)}
-                />
-                {lessonsForTheDay.map((lesson, lessonIndex) => {
+                <TableSubheadings noteTitle={formatHumanReadableDate(date)} />
+                {filterDuplicatePhysicalEducation(lessonsForTheDay).map((lesson, lessonIndex) => {
                   const fullTypeName = getFullTypeName(lesson.type.split(',')[0]);
                   const { address, roomNumber } = getAddressAndRoom(lesson.number);
                   return (
@@ -155,14 +174,11 @@ const Schedule = () => {
                 })}
               </React.Fragment>
           ))}
+
         </ScrollView>
-        <HeaderTitleIcon
-            prop="Расписание"
-            headerTitleIconPosition="absolute"
-            headerTitleIconMarginLeft={-187.5}
-            headerTitleIconTop={44}
-            headerTitleIconLeft="50%"
-        />
+
+        <Text>Тыкнуть</Text>
+
         <TabBar
             imageDimensions={require("../assets/briefcase1.png")}
             tabBarPosition="absolute"
