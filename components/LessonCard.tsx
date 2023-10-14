@@ -47,7 +47,7 @@ const LessonCard = ({
 
 const styles = StyleSheet.create({
   timeText: {
-    marginTop: 25,
+    marginTop: 27,
   },
   timeSpaceBlock: {
     paddingHorizontal: Padding.p_xs,

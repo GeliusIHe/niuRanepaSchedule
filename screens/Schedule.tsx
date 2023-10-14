@@ -1,12 +1,13 @@
 import * as React from "react";
-import {Text, StyleSheet, View, ScrollView, Button} from "react-native";
+import {Text, StyleSheet, View, ScrollView, Button, ActivityIndicator} from "react-native";
 import { Image } from "expo-image";
 import TableSubheadings from "../components/TableSubheadings";
 import LessonCard from "../components/LessonCard";
 import HeaderTitleIcon from "../components/HeaderTitleIcon";
 import TabBar from "../components/TabBar";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Color } from "../GlobalStyles";
-import {useEffect} from "react";
+import {useEffect, useState} from "react";
 type ScheduleItem = {
   kf: string;
   nf: string;
@@ -29,7 +30,7 @@ function getFullTypeName(type: string): string {
     case 'Лек':
       return 'Лекция';
     case 'Прак':
-      return 'Практическое занятие';
+      return 'Практика';
     default:
       return type; // Возвращаем исходный тип, если он не соответствует ни одному из вышеуказанных
   }
@@ -56,6 +57,8 @@ function getAddressAndRoom(room: string): { address: string, roomNumber: string 
 
 
 const Schedule = () => {
+  const [loadMoreButtonPosition, setLoadMoreButtonPosition] = useState(0);
+  const [showNotification, setShowNotification] = useState(false);
 
   const scrollViewRef = React.useRef<ScrollView>(null);
   const [isFetchingMore, setIsFetchingMore] = React.useState(false);
@@ -70,12 +73,18 @@ const Schedule = () => {
     const months = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 
     const date = new Date(dateString);
-    const dayOfWeek = daysOfWeek[date.getUTCDay()];
-    const day = date.getUTCDate();
-    const month = months[date.getUTCMonth()];
+
+    // Смещаем дату на два дня вперёд
+    date.setDate(date.getDate());
+
+    const dayOfWeek = daysOfWeek[date.getDay()];
+    const day = date.getDate();
+    const month = months[date.getMonth()];
 
     return `${dayOfWeek}, ${day} ${month}`;
   }
+
+
 
   function filterDuplicatePhysicalEducation(lessons: ScheduleItem[]): ScheduleItem[] {
     let isPhysicalEducationIncluded = false;
@@ -89,6 +98,27 @@ const Schedule = () => {
       return true;
     });
   }
+
+  const loadData = async () => {
+    const timeoutId = setTimeout(() => {
+      setShowNotification(true);
+    }, 5000); // Установить тайм-аут на 5 секунд
+
+    try {
+      const response = await fetch('http://services.niu.ranepa.ru/API/public/group/getSchedule');
+      if (response.ok) {
+        const data = await response.json();
+        // обработка данных...
+        clearTimeout(timeoutId); // очистить тайм-аут, если данные загружены успешно
+        setShowNotification(false); // скрыть уведомление
+      } else {
+        setShowNotification(true); // показать уведомление, если возникла ошибка
+      }
+    } catch (error) {
+      setShowNotification(true); // показать уведомление, если возникла ошибка
+    }
+  };
+
 
   async function loadMoreData() {
     const startDateForNextFetch = addDays(endDate, 1);  // начало загрузки - на следующий день после текущего endDate
@@ -117,10 +147,12 @@ const Schedule = () => {
       setScheduleData(prevData => [...prevData, ...newData]);
 
       setTimeout(() => {
-        if (scrollViewRef.current && scrollViewRef.current.scrollToEnd) {
-          scrollViewRef.current.scrollToEnd({ animated: true });
+        if (scrollViewRef.current && scrollViewRef.current.scrollTo) {
+          scrollViewRef.current.scrollTo({ x: 0, y: loadMoreButtonPosition, animated: true });
         }
       }, 100);
+
+
 
     } catch (error) {
       console.error('Error fetching more schedule:', error);
@@ -144,9 +176,25 @@ const Schedule = () => {
   }
 
   useEffect(() => {
-    async function fetchData() {
+    // Загрузка закешированных данных
+    async function loadCachedData() {
       try {
-        console.log('Sending request to the server...');
+        const cachedData = await AsyncStorage.getItem('scheduleData');
+        if (cachedData) {
+          setScheduleData(JSON.parse(cachedData));
+        }
+      } catch (error) {
+        console.error('Error loading cached schedule:', error);
+      }
+    }
+
+    // Загрузка данных с сервера
+    async function fetchData() {
+      const timeoutId = setTimeout(() => {
+        setShowNotification(true);
+      }, 5000); // Установить тайм-аут на 5 секунд
+
+      try {
         const response = await fetch('http://services.niu.ranepa.ru/API/public/group/getSchedule', {
           method: 'POST',
           headers: {
@@ -159,46 +207,66 @@ const Schedule = () => {
           }),
         });
 
+        clearTimeout(timeoutId); // Очистить тайм-аут
+
         if (!response.ok) {
           throw new Error(`HTTP error! Status: ${response.status}`);
         }
 
         const data = await response.json();
-        console.log('Data received from the server');
-        setScheduleData(data);
+        setShowNotification(false); // Скрыть уведомление об ошибке
 
-        setIsLoading(false);  // <-- Вот здесь
+        if (JSON.stringify(data) !== JSON.stringify(scheduleData)) {
+          setScheduleData(data); // Обновить данные расписания
+          await AsyncStorage.setItem('scheduleData', JSON.stringify(data)); // Обновить кеш
+        }
 
       } catch (error) {
-        console.error('Error fetching the schedule:', error as Error);
-        console.log('Error occurred:', (error as Error).message);
-
-        setIsLoading(false);  // И здесь
-
+        setShowNotification(true); // Показать уведомление об ошибке, если возникла ошибка
+        console.error('Error fetching the schedule:', error);
+      } finally {
+        setIsLoading(false); // Скрыть индикатор загрузки
       }
     }
 
-    fetchData();
+    loadCachedData(); // Загрузка закешированных данных при первом запуске
+    fetchData(); // Запрос на свежие данные с сервера
+
   }, []);
 
+
+
   if (isLoading) {
-    return <Text>Loading...</Text>;
+    return (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#0000ff" />
+        </View>
+    );
   }
+
 
   return (
       <View style={styles.schedule}>
+
         <HeaderTitleIcon
-            prop="Расписание"
+            prop="ИСПб-027"
             headerTitleIconPosition="absolute"
             headerTitleIconMarginLeft={-187.5}
-            headerTitleIconTop={44}
+            headerTitleIconTop={15}
             headerTitleIconLeft="50%"
         />
         <ScrollView
             ref={scrollViewRef}
-            style={{ marginTop: 86, marginBottom: 65 }}
-            onLayout={() => scrollViewRef.current?.scrollTo({ y: 10000, animated: true })}
+            style={{ marginTop: 66, marginBottom: 65 }}
         >
+          <>
+            {showNotification && (
+                <View style={{ backgroundColor: 'red', padding: 5, alignItems: 'center' }}>
+                  <Text style={{ color: 'white' }}>Не удалось извлечь новые данные с сервера</Text>
+                </View>
+            )}
+            {/* остальной код вашего компонента */}
+          </>
           {Object.entries(groupedScheduleData).map(([date, lessonsForTheDay], index) => (
               <React.Fragment key={index}>
                 <TableSubheadings noteTitle={formatHumanReadableDate(date)} />
@@ -220,7 +288,25 @@ const Schedule = () => {
                 })}
               </React.Fragment>
           ))}
-          <Button title={isFetchingMore ? "Загрузка..." : "Загрузить еще"} onPress={loadMoreData} />
+          {
+            showNotification ? (
+                <Text style={{ color: 'white' }}>Не удалось извлечь новые данные с сервера</Text>
+            ) : (
+                <View
+                    onLayout={(event) => {
+                      const layout = event.nativeEvent.layout;
+                      setLoadMoreButtonPosition(layout.y);
+                    }}
+                >
+                  <Button
+                      title={isFetchingMore ? "Загрузка..." : "Загрузить еще"}
+                      onPress={loadMoreData}
+                  />
+                </View>
+            )
+          }
+
+
 
 
         </ScrollView>
@@ -238,6 +324,11 @@ const Schedule = () => {
 };
 
 const styles = StyleSheet.create({
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
   schedule: {
     backgroundColor: Color.lightBackgroundQuaternary,
     flex: 1,

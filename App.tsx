@@ -10,7 +10,7 @@ import LessonCard from "./components/LessonCard";
 import TableSubheadings from "./components/TableSubheadings";
 
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { View, Text, Pressable, TouchableOpacity, ScrollView } from "react-native";
+import {View, Text, Pressable, TouchableOpacity, ScrollView, StatusBar} from "react-native";
 
 const App = () => {
   const [hideSplashScreen, setHideSplashScreen] = React.useState(true);
@@ -26,6 +26,7 @@ const App = () => {
   return (
     <>
       <NavigationContainer>
+        <StatusBar hidden={true} />
         {hideSplashScreen ? (
           <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen
