@@ -182,11 +182,13 @@ const Schedule = () => {
         const cachedData = await AsyncStorage.getItem('scheduleData');
         if (cachedData) {
           setScheduleData(JSON.parse(cachedData));
+          setIsLoading(false); // скрыть индикатор загрузки после загрузки кешированных данных
         }
       } catch (error) {
         console.error('Error loading cached schedule:', error);
       }
     }
+
 
     // Загрузка данных с сервера
     async function fetchData() {
@@ -214,6 +216,9 @@ const Schedule = () => {
         }
 
         const data = await response.json();
+        if (data) {
+          setIsLoading(false); // Устанавливаем isLoading в false, если данные получены с сервера
+        }
         setShowNotification(false); // Скрыть уведомление об ошибке
 
         if (JSON.stringify(data) !== JSON.stringify(scheduleData)) {
@@ -229,8 +234,8 @@ const Schedule = () => {
       }
     }
 
-    loadCachedData(); // Загрузка закешированных данных при первом запуске
-    fetchData(); // Запрос на свежие данные с сервера
+    loadCachedData(); // сначала загружаем кешированные данные
+    fetchData(); // затем обновляем данные с сервера
 
   }, []);
 
@@ -257,7 +262,7 @@ const Schedule = () => {
         />
         <ScrollView
             ref={scrollViewRef}
-            style={{ marginTop: 66, marginBottom: 65 }}
+            style={{ marginTop: 66, marginBottom: 75 }}
         >
           <>
             {showNotification && (
@@ -305,19 +310,15 @@ const Schedule = () => {
                 </View>
             )
           }
-
-
-
-
         </ScrollView>
-
-
         <TabBar
             imageDimensions={require("../assets/briefcase1.png")}
             tabBarPosition="absolute"
             tabBarTop={734}
             tabBarLeft={0}
             textColor="#007aff"
+            tabBarWidth={400} // новое свойство
+            tabBarHeight={75} // новое свойство
         />
       </View>
   );

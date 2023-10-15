@@ -1,3 +1,5 @@
+import SearchTyping from "./screens/SearchTyping";
+
 const Stack = createNativeStackNavigator();
 import * as React from "react";
 import { NavigationContainer } from "@react-navigation/native";
@@ -29,11 +31,8 @@ const App = () => {
         <StatusBar hidden={true} />
         {hideSplashScreen ? (
           <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen
-              name="Schedule"
-              component={Schedule}
-              options={{ headerShown: false }}
-            />
+            <Stack.Screen name="SearchTyping" component={SearchTyping} />
+            <Stack.Screen name="Schedule" component={Schedule} />
           </Stack.Navigator>
         ) : null}
       </NavigationContainer>
