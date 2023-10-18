@@ -101,6 +101,7 @@ const styles = StyleSheet.create({
     height: 42,
   },
   text: {
+    fontSize: 19,
     fontWeight: "600",
     color: Color.lightLabelPrimary,
     textAlign: "center",

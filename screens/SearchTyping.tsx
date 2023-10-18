@@ -5,43 +5,32 @@ import HeaderTitle from "../components/HeaderTitle";
 import SearchFocusedIcon from "../components/SearchFocusedIcon";
 import { FontSize, FontFamily, Color, Padding } from "../GlobalStyles";
 import TabBar from "../components/TabBar";
+import {useState} from "react";
 
 const SearchTyping = () => {
+    const [searchQuery, setSearchQuery] = useState(''); // Состояние для отслеживания текста в поле ввода
   return (
-    <View style={styles.searchTyping}>
-      <HeaderTitle
-        prop="Поиск"
-        headerTitlePosition="absolute"
-        headerTitleMarginLeft={-187.5}
-        headerTitleTop={44}
-        headerTitleLeft="50%"
-      />
+  <View style={[styles.searchTyping, {flex: 1, flexDirection: 'column', justifyContent: 'space-between'}]}>
       <SearchFocusedIcon
-        showCursor1
-        searchFocusedIconPosition="absolute"
-        searchFocusedIconBorderStyle="unset"
-        searchFocusedIconBorderColor="unset"
-        searchFocusedIconTop={87}
-        searchFocusedIconLeft={0}
-        inputFieldJustifyContent="flex-start"
-        textWidth="unset"
-        textWidth1={45}
-        textLineHeight={24}
+          searchFocusedIconPosition="absolute"
+          searchFocusedIconBorderStyle="solid"
+          searchFocusedIconBorderColor="lightgrey"
+          searchFocusedIconTop={100} // Вы можете настроить это значение
+          searchFocusedIconLeft={0}
+          inputFieldJustifyContent="flex-start"
+          textWidth="unset"
+          textWidth1={280}
+          textLineHeight={24}
       />
-      <View style={styles.content}>
-        <Text style={styles.text}>{`Приложение сможет найти расписание 
-преподавателя, группы и аудитории 👍`}</Text>
-      </View>
       <TabBar
-          imageDimensions={require("../assets/briefcase1.png")}
+          imageDimensions={require("../assets/briefcaseGray.png")}
           tabBarPosition="absolute"
-          tabBarTop={734}
+          tabBarTop={800}
           tabBarLeft={0}
           textColor="#007aff"
-          tabBarWidth={400} // новое свойство
-          tabBarHeight={60} // новое свойство
+          tabBarWidth={400}
+          tabBarHeight={75}
       />
-
     </View>
   );
 };
@@ -54,17 +43,6 @@ const styles = StyleSheet.create({
     color: Color.lightLabelSecondary,
     textAlign: "center",
     marginLeft: 30,},
-  content: {
-    position: "absolute",
-    top: 368,
-    left: 0,
-    backgroundColor: Color.lightBackgroundQuaternary,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: Padding.p_xl,
-    width: 375,
-  },
   searchTyping: {
     backgroundColor: Color.lightBackgroundTertiary,
     height: 812,

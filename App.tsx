@@ -31,8 +31,8 @@ const App = () => {
         <StatusBar hidden={true} />
         {hideSplashScreen ? (
           <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="SearchTyping" component={SearchTyping} />
             <Stack.Screen name="Schedule" component={Schedule} />
+            <Stack.Screen name="SearchTyping" component={SearchTyping} />
           </Stack.Navigator>
         ) : null}
       </NavigationContainer>

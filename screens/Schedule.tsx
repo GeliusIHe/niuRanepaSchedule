@@ -294,9 +294,7 @@ const Schedule = () => {
               </React.Fragment>
           ))}
           {
-            showNotification ? (
-                <Text style={{ color: 'white' }}>Не удалось извлечь новые данные с сервера</Text>
-            ) : (
+            showNotification ? null : (
                 <View
                     onLayout={(event) => {
                       const layout = event.nativeEvent.layout;
@@ -310,15 +308,16 @@ const Schedule = () => {
                 </View>
             )
           }
+
         </ScrollView>
         <TabBar
-            imageDimensions={require("../assets/briefcase1.png")}
+            imageDimensions={require("../assets/briefcaseGray.png")}
             tabBarPosition="absolute"
             tabBarTop={734}
             tabBarLeft={0}
             textColor="#007aff"
-            tabBarWidth={400} // новое свойство
-            tabBarHeight={75} // новое свойство
+            tabBarWidth={400}
+            tabBarHeight={75}
         />
       </View>
   );

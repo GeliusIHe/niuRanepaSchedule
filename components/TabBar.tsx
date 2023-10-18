@@ -1,20 +1,19 @@
-import React, { useMemo } from "react";
+import React, {useEffect, useMemo, useState} from "react";
 import { Image } from "expo-image";
 import {StyleSheet, Text, View, ImageSourcePropType, Dimensions, TouchableOpacity} from "react-native";
 import { FontSize, FontFamily, Color, Padding } from "../GlobalStyles";
-import {useNavigation} from "@react-navigation/core";
+import {useIsFocused, useNavigation, useNavigationState} from "@react-navigation/core";
 
 type TabBarType = {
     imageDimensions?: ImageSourcePropType;
 
-    /** Style props */
     tabBarPosition?: string;
     tabBarTop?: number | string;
     tabBarLeft?: number | string;
     textColor?: string;
 
-    tabBarWidth?: number; // новое свойство
-    tabBarHeight?: number; // новое свойство
+    tabBarWidth?: number;
+    tabBarHeight?: number;
 };
 
 const getStyleValue = (key: string, value: string | number | undefined) => {
@@ -37,7 +36,24 @@ const TabBar = ({
       ...getStyleValue("left", 0), // Размещаем слева
     };
   }, []);
+    const [activeTab, setActiveTab] = useState('Schedule'); // Устанавливаем начальное состояние
     const navigation = useNavigation();
+    const navState = useNavigationState(state => state); // Определение navState
+
+    useEffect(() => {
+        const routeName = navState.routes[navState.index].name as 'Schedule' | 'Chat' | 'SearchTyping' | 'Profile';
+        setActiveTab(routeName);
+    }, [navState.index]); // Обновление при изменении индекса в navState
+
+    const handleTabPress = (routeName: 'Schedule' | 'Chat' | 'SearchTyping' | 'Profile') => {
+        setActiveTab(routeName);
+        navigation.navigate(routeName as never);
+    };
+
+
+    const getTabStyles = (tabName: 'Schedule' | 'Chat' | 'SearchTyping' | 'Profile') => {
+        return activeTab === tabName ? { color: '#0381ff' } : {};
+    };
 
   const textStyle = useMemo(() => {
     return {
@@ -52,18 +68,17 @@ const TabBar = ({
             styles.container,
             { width: tabBarWidth, height: tabBarHeight } // применение новых свойств
         ]}>
-            <TouchableOpacity onPress={() => navigation.navigate('Schedule')}>
+            <TouchableOpacity onPress={() => handleTabPress('Schedule')}>
                 <View style={styles.iconContainer}>
-                    <Image
-                        style={styles.briefcaseIcon}
-                        contentFit="cover"
-                        source={imageDimensions}
-                    />
-                    <Text style={[styles.text, textStyle]}>Расписание</Text>
+                    {activeTab === 'Schedule' ?
+                        <Image style={styles.briefcaseIcon} source={require("../assets/briefcaseBlue.png")} /> :
+                        <Image style={styles.briefcaseIcon} source={require("../assets/briefcaseGray.png")} />
+                    }
+                    <Text style={[styles.text, getTabStyles('Schedule')]}>Расписание</Text>
                 </View>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => navigation.navigate('Chat')}>
+            <TouchableOpacity onPress={() => handleTabPress('Chat')}>
                 <View style={styles.iconContainer}>
                     <Image
                         style={styles.briefcaseIcon}
@@ -74,18 +89,17 @@ const TabBar = ({
                 </View>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => navigation.navigate('SearchTyping')}>
+            <TouchableOpacity onPress={() => handleTabPress('SearchTyping')}>
                 <View style={styles.iconContainer}>
-                    <Image
-                        style={styles.briefcaseIcon}
-                        contentFit="cover"
-                        source={require("../assets/magnifyingglass.png")}
-                    />
-                    <Text style={styles.text}>Поиск</Text>
+                    {activeTab === 'SearchTyping' ?
+                        <Image style={[styles.briefcaseIcon, {width: 28, height: 28}]} source={require("../assets/magnifyingglassBlue.svg")} /> :
+                        <Image style={[styles.briefcaseIcon, {width: 28, height: 28}]} source={require("../assets/magnifyingglassGray.svg")} />
+                    }
+                    <Text style={[styles.text, getTabStyles('SearchTyping')]}>Поиск</Text>
                 </View>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+            <TouchableOpacity onPress={() => handleTabPress('Profile')}>
                 <View style={styles.iconContainer}>
                     <Image
                         style={styles.briefcaseIcon}
