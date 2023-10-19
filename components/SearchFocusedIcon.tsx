@@ -1,6 +1,6 @@
 import React, {useEffect, useMemo, useState} from "react";
 import { Image } from "expo-image";
-import {StyleSheet, View, Text, TextInput} from "react-native";
+import {StyleSheet, View, Text, TextInput, TouchableOpacity} from "react-native";
 import { FontFamily, Color, FontSize, Border, Padding } from "../GlobalStyles";
 import HeaderTitle from "./HeaderTitle";
 import { debounce } from 'lodash';
@@ -121,38 +121,74 @@ const SearchFocusedIcon = ({
     Title: string;
   }
 
+  function extractCourseNumber(groupName: string) {
+    // Пытаемся найти число в названии группы и извлекаем из него вторую цифру
+    const match = groupName.match(/\d+/);
+    return match ? match[0][1] : null;
+  }
+
+
   return (
       <View style={styles.mainContainer}>
         <HeaderTitle
             prop="Поиск"
-            headerTitleMarginLeft={-187.5}
+            headerTitleMarginLeft={-200.5}
             headerTitleTop={10}
             headerTitleLeft="50%"
         />
-        <View style={styles.searchContainer}>
-          <Image style={styles.searchIcon} source={require("../assets/search1.png")} />
-          <TextInput
-              style={styles.input}
-              placeholder="Введите текст"
-              onChangeText={text => {
-                setSearchQuery(text);
-                if (text.trim() === '') {
-                  setSearchResults([]); // Очистить результаты поиска, если текст был удален
-                } else {
-                  //  код для получения результатов поиска на основе текста
-                }
-              }}
-              value={searchQuery}
-          />
-          <Image style={styles.sfSymbolXmarkcirclefill} source={require("../assets/sf-symbol--xmarkcirclefill.png")} />
+          <View style={[styles.searchContainer]}>
+            <Image style={styles.searchIcon} source={require("../assets/search1.png")} />
+            <TextInput
+                style={[styles.input]}
+                placeholder="Поиск"
+                onChangeText={text => {
+                  setSearchQuery(text);
+                  if (text.trim() === '') {
+                    setSearchResults([]); // Очистить результаты поиска, если текст был удален
+                  } else {
+                    //  код для получения результатов поиска на основе текста
+                  }
+                }}
+                value={searchQuery}
+            />
+            <Image style={styles.sfSymbolXmarkcirclefill} source={require("../assets/sf-symbol--xmarkcirclefill.png")} />
+          </View>
+        <View style={styles.inputLine}>
+
         </View>
         <View style={styles.resultContainer}>
           {searchResults.map(item => (
-              <Text style={styles.resultText} key={item.id}>
-                {item.Title}
-              </Text>
+              <TouchableOpacity
+                  onPress={() => navigation.navigate('Schedule', { groupId: item.id })}
+              >
+                <View
+                    style={[
+                      styles.groupContainer,
+                      item.Type === "Group" ? {height: 80} : null,
+                      item.Type === "Prep" ? styles.prepMargin : null
+                    ]}
+                    key={item.id}
+                >
+                  <Text
+                      style={[
+                        styles.resultText,
+                        item.Type === "Group" ? [styles.boldText, styles.groupTitle] : null
+                      ]}
+                  >
+                    {item.Title}
+                  </Text>
+                  {item.Type === "Group" && (
+                      <Text style={styles.additionalText}>
+                        СПО, {extractCourseNumber(item.Title)} курс, очная форма
+                      </Text>
+                  )}
+                </View>
+              </TouchableOpacity>
           ))}
         </View>
+
+
+
         <View style={styles.content}>
           {searchQuery === '' && ( // Рендер текста, только если поле ввода пустое
               <Text style={styles.contentText}>{`Приложение сможет найти расписание 
@@ -164,6 +200,32 @@ const SearchFocusedIcon = ({
 };
 
 const styles = StyleSheet.create({
+  prepMargin: {
+    marginBottom: -50, // Установите вертикальный отступ снизу
+  },
+  groupTitle: {
+    marginTop: 15, // Установите верхний отступ для названия группы
+  },
+  boldText: {
+  },
+  groupContainer: {
+    paddingLeft: 20,
+    height: 80,
+    borderStyle: "solid",
+    borderColor: Color.colorDarkslategray_100,
+    borderBottomWidth: 0.5,
+  },
+  additionalText: {
+    marginTop: -4, // или другое значение, чтобы регулировать расстояние между текстами
+    fontSize: 12, // или другой размер шрифта, который вам подходит
+    color: 'grey', // или другой цвет, который вам подходит
+  },
+  inputLine: {
+    marginTop: 15,
+    borderStyle: "solid",
+    borderColor: Color.colorDarkslategray_100,
+    borderBottomWidth: 0.5,
+  },
   contentText: {
     fontSize: FontSize.footnoteRegular_size,
     letterSpacing: 0,
@@ -184,32 +246,31 @@ const styles = StyleSheet.create({
   },
   mainContainer: {
     flex: 1,
-    padding: 10,
   },
   label: {
     fontSize: 16,
     marginBottom: 10, // Расстояние между надписью "Поиск" и полем поиска
   },
   searchContainer: {
-    marginTop: 40,
+    marginTop: 25,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'lightgrey',
-    borderRadius: 5,
+    borderRadius: 12,
     paddingHorizontal: 10,
+    marginHorizontal: 15,
   },
   input: {
     flex: 1,
     height: 40,
     marginLeft: 10,
-    borderRadius: 5,
   },
   container: {
     flex: 1,
     padding: 10,
   },
   resultContainer: {
-    marginTop: 20,
+    marginTop: 2,
   },
   resultText: {
     fontSize: 16,

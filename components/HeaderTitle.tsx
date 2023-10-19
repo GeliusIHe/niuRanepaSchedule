@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     borderStyle: "solid",
     borderColor: Color.colorDarkslategray_100,
     borderBottomWidth: 0.5,
-    width: 375,
+    width: 400,
     height: 42,
   },
 });
