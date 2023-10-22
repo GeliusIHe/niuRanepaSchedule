@@ -66,6 +66,8 @@ const SearchFocusedIcon = ({
   const [currentGroupId, setCurrentGroupId] = useState(null);
   const [searchedGroupId, setSearchedGroupId] = useState(null);
   const [isShowingSelectedGroupSchedule, setIsShowingSelectedGroupSchedule] = useState(false);
+  const [selectedGroupName, setSelectedGroupName] = useState("");
+
 
 
   const { setGroupId } = useGroupId();
@@ -150,40 +152,39 @@ const SearchFocusedIcon = ({
   const [selectedGroupId, setSelectedGroupId] = useState(null);
   const navigation = useNavigation();
 
-  const handleGroupClick = (groupId: any) => {
+  const handleGroupClick = (groupId: any, groupName: string) => {
     setGroupId(groupId); // обновление groupId в контексте
-    console.log(`Установлен groupId ${groupId}`)
+    setSelectedGroupName(groupName); // обновление названия группы
+    console.log(`Установлен groupId ${groupId}`);
     setIsShowingSelectedGroupSchedule(true); // показываем расписание
-    // не выполняем навигацию, оставаясь на текущем экране (Поиск)
   };
+
   const handleBackToSearchClick = () => {
     setIsShowingSelectedGroupSchedule(false); // скрываем расписание, возвращаясь к поиску
   };
 
-
-
-
   return (
       <View style={styles.mainContainer}>
 
-        <HeaderTitle
-            prop="Поиск"
-            headerTitleMarginLeft={-200.5}
-            headerTitleTop={10}
-            headerTitleLeft="50%"
-        />
-
         {isShowingSelectedGroupSchedule ? (
             <>
-              <TouchableOpacity onPress={handleBackToSearchClick}>
-                <Text>Вернуться к поиску</Text>
+              <TouchableOpacity onPress={handleBackToSearchClick} style={styles.container2}>
+                <View style={styles.iconContainer2}>
+                  <Image style={[{width: 20, height: 20}]} source={require("../assets/backicon.svg")} />
+                </View>
+                <Text style={styles.text3}>Поиск</Text>
               </TouchableOpacity>
-              <Schedule groupIdProp={selectedGroupId} />
+              <Schedule groupIdProp={selectedGroupId} groupName={selectedGroupName} />
             </>
         ) : (
             <>
+              <HeaderTitle
+                  prop="Поиск"
+                  headerTitleMarginLeft={-200.5}
+                  headerTitleTop={10}
+                  headerTitleLeft="50%"
+              />
               <View style={[styles.searchContainer]}>
-                <Image style={styles.searchIcon} source={require("../assets/search1.png")} />
                 <TextInput
                     style={[styles.input]}
                     placeholder="Поиск"
@@ -199,27 +200,21 @@ const SearchFocusedIcon = ({
 
               <View style={styles.resultContainer}>
                 {searchResults.map(item => (
-                    <TouchableOpacity onPress={() => handleGroupClick(item.id)}>
-                      <View
-                          style={[
-                            styles.groupContainer,
-                            item.Type === "Group" ? {height: 80} : null,
-                            item.Type === "Prep" ? styles.prepMargin : null
-                          ]}
-                      >
-                        <Text
-                            style={[
-                              styles.resultText,
-                              item.Type === "Group" ? [styles.boldText, styles.groupTitle] : null
-                            ]}
-                        >
-                          {item.Title}
-                        </Text>
-                        {item.Type === "Group" && (
-                            <Text style={styles.additionalText}>
-                              СПО, {extractCourseNumber(item.Title)} курс, очная форма
-                            </Text>
+                    <TouchableOpacity onPress={() => handleGroupClick(item.id, item.Title)}>
+                      <View style={[styles.groupContainer, { flexDirection: 'row', alignItems: 'center' }]}>
+                        {item.Type === "Prep" && (
+                            <View style={styles.iconContainer}>
+                              <Image source={require("../assets/Graduationcap.svg")} style={styles.icon} />
+                            </View>
                         )}
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.resultText, styles.boldText]}>
+                            {item.Title}
+                          </Text>
+                          <Text style={styles.additionalText}>
+                            {item.Type === "Group" ? `СПО, ${extractCourseNumber(item.Title)} курс, очная форма` : "Информация о преподавателе"}
+                          </Text>
+                        </View>
                       </View>
                     </TouchableOpacity>
                 ))}
@@ -237,6 +232,39 @@ const SearchFocusedIcon = ({
 };
 
 const styles = StyleSheet.create({
+  iconContainer: {
+    width: 40, // или другой размер, который вам подходит
+    height: 40, // или другой размер, который вам подходит
+    borderRadius: 20, // это сделает кружок
+    backgroundColor: '#fff', // или другой цвет, если вы хотите
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 20, // отступ справа от иконки
+  },
+  icon: {
+    width: 20, // или другой размер, который вам подходит
+    height: 20, // или другой размер, который вам подходит
+    resizeMode: 'contain',
+  },
+  container2: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+    height: 45,
+    paddingHorizontal: 7,
+    borderRadius: 5,
+  },
+  iconContainer2: {
+    marginRight: 7,
+    marginTop: 9.5,
+  },
+  text3: {
+    color: '#007AFF',
+    marginTop: 15,
+    marginBottom: 9.5,
+    marginLeft: -6,
+    fontSize: 16,
+  },
   prepMargin: {
     marginBottom: -50,
   },
@@ -286,7 +314,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 16,
-    marginBottom: 10, // Расстояние между надписью "Поиск" и полем поиска
+    marginBottom: 10,
   },
   searchContainer: {
     marginTop: 25,

@@ -6,7 +6,7 @@ import LessonCard from "../components/LessonCard";
 import HeaderTitleIcon from "../components/HeaderTitleIcon";
 import TabBar from "../components/TabBar";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {Color} from "../GlobalStyles";
+import {Color, FontFamily, FontSize} from "../GlobalStyles";
 import {useGroupId} from "../components/GroupIdContext";
 
 type ScheduleItem = {
@@ -58,8 +58,9 @@ function getAddressAndRoom(room: string): { address: string, roomNumber: string 
 
 interface ScheduleProps {
   groupIdProp: string | null;
+  groupName?: string;
 }
-const Schedule: React.FC<ScheduleProps> = ({ groupIdProp }) => {
+const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
   const { groupId: groupIdFromHook } = useGroupId();
 
   const actualGroupId = groupIdProp !== null ? groupIdProp : groupIdFromHook;
@@ -184,8 +185,11 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp }) => {
         console.log("groupId не определен");
       }
 
+      const baseUrl = "http://services.niu.ranepa.ru/API/public/";
+      let actualGroupName = groupName ? groupName : "ИСПб-027"; // Если groupName не определено, использовать "ИСПб-027"
+      let endpoint = isGroup(actualGroupName) ? "group/getSchedule" : "teacher/getSchedule"; // динамически выбираем endpoint
       try {
-        const response = await fetch('http://services.niu.ranepa.ru/API/public/group/getSchedule', {
+        const response = await fetch(`${baseUrl}${endpoint}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -202,8 +206,6 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp }) => {
         } else {
           console.log('groupId or groupId.groupId is not defined:', actualGroupId);
         }
-
-
         clearTimeout(timeoutId); // Очистить тайм-аут
 
         if (!response.ok) {
@@ -243,21 +245,36 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp }) => {
     );
   }
 
+  function isGroup(groupName: any) {
+    // Регулярное выражение для поиска чисел в строке
+    const hasNumbers = /\d/;
 
+    // Проверка, содержит ли groupName числа
+    return hasNumbers.test(groupName);
+  }
   return (
       <View style={styles.schedule}>
-
-        <HeaderTitleIcon
-            prop="ИСПб-027"
-            headerTitleIconPosition="absolute"
-            headerTitleIconMarginLeft={-187.5}
-            headerTitleIconTop={15}
-            headerTitleIconLeft="50%"
-        />
+        {groupName ? (
+            <View style={{ height: 100, backgroundColor: 'white', paddingLeft: 20, paddingTop: 20 }}>
+              <Text style={[{ color: '#007AFF', fontWeight: '800'}, styles.textTypo]}>{isGroup(groupName) ? 'Группа' : 'Преподаватель'}</Text>
+              <Text style={[{marginTop: 5, fontWeight: 'bold'}, styles.textTypo]}>{groupName}</Text>
+              <Text style={[{marginTop: 5, color: '#8E8E93'}, styles.textTypo]}>{isGroup(groupName) ? 'Информация о группе' : 'Информация о преподавателе'}</Text>
+            </View>
+        ) : (
+            <HeaderTitleIcon
+                prop="Не указано"
+                headerTitleIconPosition="absolute"
+                headerTitleIconMarginLeft={-187.5}
+                headerTitleIconTop={15}
+                headerTitleIconLeft="50%"
+            />
+        )}
         <ScrollView
             ref={scrollViewRef}
-            style={{ marginTop: 66, marginBottom: 75 }}
-        >
+            style={{
+              marginTop: groupName ? 0 : 66, // Устанавливаем marginTop в зависимости от наличия groupName
+              marginBottom: 75
+            }}        >
           <>
             {showNotification && (
                 <View style={{ backgroundColor: 'red', padding: 5, alignItems: 'center' }}>
@@ -265,7 +282,8 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp }) => {
                 </View>
             )}
           </>
-          {Object.entries(groupedScheduleData).map(([date, lessonsForTheDay], index) => (
+          {Object.entries(groupedScheduleData).length > 0 ? (
+              Object.entries(groupedScheduleData).map(([date, lessonsForTheDay], index) => (
               <React.Fragment key={index}>
                 <TableSubheadings noteTitle={formatHumanReadableDate(date)} />
                 {filterDuplicatePhysicalEducation(lessonsForTheDay).map((lesson, lessonIndex) => {
@@ -285,23 +303,26 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp }) => {
                   );
                 })}
               </React.Fragment>
-          ))}
-          {
-            showNotification ? null : (
-                <View
-                    onLayout={(event) => {
-                      const layout = event.nativeEvent.layout;
-                      setLoadMoreButtonPosition(layout.y);
-                    }}
-                >
-                  <Button
-                      title={isFetchingMore ? "Загрузка..." : "Загрузить еще"}
-                      onPress={loadMoreData}
-                  />
-                </View>
-            )
-          }
-
+          ))) : (
+              <View style={styles.noDataContainer}>
+                <Text style={styles.noDataText}>
+                  У данного преподавателя нет расписания за указанный период.
+                </Text>
+              </View>
+          )}
+          {Object.entries(groupedScheduleData).length > 0 && !showNotification && (
+              <View
+                  onLayout={(event) => {
+                    const layout = event.nativeEvent.layout;
+                    setLoadMoreButtonPosition(layout.y);
+                  }}
+              >
+                <Button
+                    title={isFetchingMore ? "Загрузка..." : "Загрузить еще"}
+                    onPress={loadMoreData}
+                />
+              </View>
+          )}
         </ScrollView>
         <TabBar
             imageDimensions={require("../assets/briefcaseGray.png")}
@@ -317,6 +338,23 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp }) => {
 };
 
 const styles = StyleSheet.create({
+  noDataContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  noDataText: {
+    fontSize: 18,
+    textAlign: 'center',
+  },
+  textTypo: {
+    textAlign: "left",
+    fontFamily: FontFamily.tabBarMedium,
+    lineHeight: 18,
+    letterSpacing: 0,
+    fontSize: FontSize.footnoteRegular_size,
+  },
   centered: {
     flex: 1,
     justifyContent: 'center',
