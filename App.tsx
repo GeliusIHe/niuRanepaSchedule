@@ -13,6 +13,7 @@ import TableSubheadings from "./components/TableSubheadings";
 
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import {View, Text, Pressable, TouchableOpacity, ScrollView, StatusBar} from "react-native";
+import {GroupIdProvider} from "./components/GroupIdContext";
 
 const App = () => {
   const [hideSplashScreen, setHideSplashScreen] = React.useState(true);
@@ -27,15 +28,17 @@ const App = () => {
 
   return (
     <>
-      <NavigationContainer>
-        <StatusBar hidden={true} />
-        {hideSplashScreen ? (
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="Schedule" component={Schedule} />
-            <Stack.Screen name="SearchTyping" component={SearchTyping} />
-          </Stack.Navigator>
-        ) : null}
-      </NavigationContainer>
+      <GroupIdProvider>
+        <NavigationContainer>
+          <StatusBar hidden={true} />
+          {hideSplashScreen ? (
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="Schedule" component={Schedule} />
+              <Stack.Screen name="SearchTyping" component={SearchTyping} />
+            </Stack.Navigator>
+          ) : null}
+        </NavigationContainer>
+      </GroupIdProvider>
     </>
   );
 };

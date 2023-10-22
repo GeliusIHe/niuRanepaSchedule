@@ -1,13 +1,14 @@
 import * as React from "react";
-import {Text, StyleSheet, View, ScrollView, Button, ActivityIndicator} from "react-native";
-import { Image } from "expo-image";
+import {useEffect, useState} from "react";
+import {ActivityIndicator, Button, ScrollView, StyleSheet, Text, View} from "react-native";
 import TableSubheadings from "../components/TableSubheadings";
 import LessonCard from "../components/LessonCard";
 import HeaderTitleIcon from "../components/HeaderTitleIcon";
 import TabBar from "../components/TabBar";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Color } from "../GlobalStyles";
-import {useEffect, useState} from "react";
+import {Color} from "../GlobalStyles";
+import {useGroupId} from "../components/GroupIdContext";
+
 type ScheduleItem = {
   kf: string;
   nf: string;
@@ -55,8 +56,13 @@ function getAddressAndRoom(room: string): { address: string, roomNumber: string 
   }
 }
 
+interface ScheduleProps {
+  groupIdProp: string | null;
+}
+const Schedule: React.FC<ScheduleProps> = ({ groupIdProp }) => {
+  const { groupId: groupIdFromHook } = useGroupId();
 
-const Schedule = () => {
+  const actualGroupId = groupIdProp !== null ? groupIdProp : groupIdFromHook;
   const [loadMoreButtonPosition, setLoadMoreButtonPosition] = useState(0);
   const [showNotification, setShowNotification] = useState(false);
 
@@ -83,9 +89,6 @@ const Schedule = () => {
 
     return `${dayOfWeek}, ${day} ${month}`;
   }
-
-
-
   function filterDuplicatePhysicalEducation(lessons: ScheduleItem[]): ScheduleItem[] {
     let isPhysicalEducationIncluded = false;
     return lessons.filter(lesson => {
@@ -98,31 +101,11 @@ const Schedule = () => {
       return true;
     });
   }
-
-  const loadData = async () => {
-    const timeoutId = setTimeout(() => {
-      setShowNotification(true);
-    }, 5000); // Установить тайм-аут на 5 секунд
-
-    try {
-      const response = await fetch('http://services.niu.ranepa.ru/API/public/group/getSchedule');
-      if (response.ok) {
-        const data = await response.json();
-        // обработка данных...
-        clearTimeout(timeoutId); // очистить тайм-аут, если данные загружены успешно
-        setShowNotification(false); // скрыть уведомление
-      } else {
-        setShowNotification(true); // показать уведомление, если возникла ошибка
-      }
-    } catch (error) {
-      setShowNotification(true); // показать уведомление, если возникла ошибка
-    }
-  };
-
-
   async function loadMoreData() {
-    const startDateForNextFetch = addDays(endDate, 1);  // начало загрузки - на следующий день после текущего endDate
-    const newEndDate = addDays(startDateForNextFetch, 6);  // конец загрузки - через 6 дней после начала загрузки
+    const groupIdString = actualGroupId ? String(actualGroupId) : "18792";
+
+    const startDateForNextFetch = addDays(endDate, 1);
+    const newEndDate = addDays(startDateForNextFetch, 6);
     setEndDate(newEndDate);
     setIsFetchingMore(true);
 
@@ -133,7 +116,7 @@ const Schedule = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          id: "18792",
+          id: groupIdString, // используется условный оператор для установки id
           dateBegin: formatDate(startDateForNextFetch),
           dateEnd: formatDate(newEndDate)
         }),
@@ -151,17 +134,12 @@ const Schedule = () => {
           scrollViewRef.current.scrollTo({ x: 0, y: loadMoreButtonPosition, animated: true });
         }
       }, 100);
-
-
-
     } catch (error) {
       console.error('Error fetching more schedule:', error);
     } finally {
       setIsFetchingMore(false);
     }
   }
-
-
 
   const formatDate = (date: Date): string => {
     const day = String(date.getDate()).padStart(2, '0');
@@ -188,13 +166,23 @@ const Schedule = () => {
         console.error('Error loading cached schedule:', error);
       }
     }
-
-
     // Загрузка данных с сервера
     async function fetchData() {
+      let groupIdString;
+      if (actualGroupId) {
+        groupIdString = String(actualGroupId);
+        console.log(`groupidstring ${groupIdString}`)
+      } else {
+        groupIdString = "18792"; // ID группы по умолчанию
+      }
       const timeoutId = setTimeout(() => {
         setShowNotification(true);
       }, 5000); // Установить тайм-аут на 5 секунд
+      if (actualGroupId) {
+        console.log("Текущий ID группы:", actualGroupId);
+      } else {
+        console.log("groupId не определен");
+      }
 
       try {
         const response = await fetch('http://services.niu.ranepa.ru/API/public/group/getSchedule', {
@@ -203,18 +191,26 @@ const Schedule = () => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            id: "18792",
+            id: groupIdString, // используйте groupId, переданный как prop
             dateBegin: formatDate(new Date()),
             dateEnd: formatDate(addDays(new Date(), 7))
           }),
         });
+        if (actualGroupId) {
+          const groupIdString = String(actualGroupId);
+          console.log(`Trying to get ${groupIdString}`);
+        } else {
+          console.log('groupId or groupId.groupId is not defined:', actualGroupId);
+        }
+
 
         clearTimeout(timeoutId); // Очистить тайм-аут
 
         if (!response.ok) {
+          const errorData = await response.json(); // попытаться получить данные об ошибке из ответа сервера
+          console.error('Error data:', errorData); // вывод данных об ошибке
           throw new Error(`HTTP error! Status: ${response.status}`);
         }
-
         const data = await response.json();
         if (data) {
           setIsLoading(false); // Устанавливаем isLoading в false, если данные получены с сервера
@@ -237,9 +233,7 @@ const Schedule = () => {
     loadCachedData(); // сначала загружаем кешированные данные
     fetchData(); // затем обновляем данные с сервера
 
-  }, []);
-
-
+  }, [actualGroupId]); // добавление groupId в зависимости useEffect
 
   if (isLoading) {
     return (
@@ -270,7 +264,6 @@ const Schedule = () => {
                   <Text style={{ color: 'white' }}>Не удалось извлечь новые данные с сервера</Text>
                 </View>
             )}
-            {/* остальной код вашего компонента */}
           </>
           {Object.entries(groupedScheduleData).map(([date, lessonsForTheDay], index) => (
               <React.Fragment key={index}>

@@ -4,6 +4,9 @@ import {StyleSheet, View, Text, TextInput, TouchableOpacity} from "react-native"
 import { FontFamily, Color, FontSize, Border, Padding } from "../GlobalStyles";
 import HeaderTitle from "./HeaderTitle";
 import { debounce } from 'lodash';
+import {useNavigation} from "@react-navigation/core";
+import Schedule from "../screens/Schedule";
+import {useGroupId} from "./GroupIdContext";
 
 type SearchFocusedIconType = {
   showCursor1?: boolean;
@@ -60,6 +63,16 @@ const SearchFocusedIcon = ({
   const [searchQuery, setSearchQuery] = useState(''); // для хранения запроса пользователя
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentGroupId, setCurrentGroupId] = useState(null);
+  const [searchedGroupId, setSearchedGroupId] = useState(null);
+  const [isShowingSelectedGroupSchedule, setIsShowingSelectedGroupSchedule] = useState(false);
+
+
+  const { setGroupId } = useGroupId();
+
+  const handleGroupSelect = (selectedGroupId: any) => {
+    setGroupId(selectedGroupId);
+  };
 
   const inputFieldStyle = useMemo(() => {
     return {
@@ -82,7 +95,12 @@ const SearchFocusedIcon = ({
 
   const debouncedSearch = debounce((query: string) => {
     fetch(`http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?name=${query}`)
-        .then(response => response.json())
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Network response was not ok ' + response.statusText);
+          }
+          return response.json();
+        })
         .then(data => {
           const rawData = data.GetNameUidForRaspResult?.ItemRaspUID || [];
 
@@ -90,6 +108,9 @@ const SearchFocusedIcon = ({
           const results = Array.isArray(rawData) ? rawData : [rawData];
 
           setSearchResults(results);
+        })
+        .catch(error => {
+          console.error('There was a problem with the fetch operation:', error);
         });
   }, 300); // задержка в 300 миллисекунд
 
@@ -126,85 +147,101 @@ const SearchFocusedIcon = ({
     const match = groupName.match(/\d+/);
     return match ? match[0][1] : null;
   }
+  const [selectedGroupId, setSelectedGroupId] = useState(null);
+  const navigation = useNavigation();
+
+  const handleGroupClick = (groupId: any) => {
+    setGroupId(groupId); // обновление groupId в контексте
+    console.log(`Установлен groupId ${groupId}`)
+    setIsShowingSelectedGroupSchedule(true); // показываем расписание
+    // не выполняем навигацию, оставаясь на текущем экране (Поиск)
+  };
+  const handleBackToSearchClick = () => {
+    setIsShowingSelectedGroupSchedule(false); // скрываем расписание, возвращаясь к поиску
+  };
+
+
 
 
   return (
       <View style={styles.mainContainer}>
+
         <HeaderTitle
             prop="Поиск"
             headerTitleMarginLeft={-200.5}
             headerTitleTop={10}
             headerTitleLeft="50%"
         />
-          <View style={[styles.searchContainer]}>
-            <Image style={styles.searchIcon} source={require("../assets/search1.png")} />
-            <TextInput
-                style={[styles.input]}
-                placeholder="Поиск"
-                onChangeText={text => {
-                  setSearchQuery(text);
-                  if (text.trim() === '') {
-                    setSearchResults([]); // Очистить результаты поиска, если текст был удален
-                  } else {
-                    //  код для получения результатов поиска на основе текста
-                  }
-                }}
-                value={searchQuery}
-            />
-            <Image style={styles.sfSymbolXmarkcirclefill} source={require("../assets/sf-symbol--xmarkcirclefill.png")} />
-          </View>
-        <View style={styles.inputLine}>
 
-        </View>
-        <View style={styles.resultContainer}>
-          {searchResults.map(item => (
-              <TouchableOpacity
-                  onPress={() => navigation.navigate('Schedule', { groupId: item.id })}
-              >
-                <View
-                    style={[
-                      styles.groupContainer,
-                      item.Type === "Group" ? {height: 80} : null,
-                      item.Type === "Prep" ? styles.prepMargin : null
-                    ]}
-                    key={item.id}
-                >
-                  <Text
-                      style={[
-                        styles.resultText,
-                        item.Type === "Group" ? [styles.boldText, styles.groupTitle] : null
-                      ]}
-                  >
-                    {item.Title}
-                  </Text>
-                  {item.Type === "Group" && (
-                      <Text style={styles.additionalText}>
-                        СПО, {extractCourseNumber(item.Title)} курс, очная форма
-                      </Text>
-                  )}
-                </View>
+        {isShowingSelectedGroupSchedule ? (
+            <>
+              <TouchableOpacity onPress={handleBackToSearchClick}>
+                <Text>Вернуться к поиску</Text>
               </TouchableOpacity>
-          ))}
-        </View>
+              <Schedule groupIdProp={selectedGroupId} />
+            </>
+        ) : (
+            <>
+              <View style={[styles.searchContainer]}>
+                <Image style={styles.searchIcon} source={require("../assets/search1.png")} />
+                <TextInput
+                    style={[styles.input]}
+                    placeholder="Поиск"
+                    onChangeText={text => {
+                      setSearchQuery(text);
+                    }}
+                    value={searchQuery}
+                />
+                <Image style={styles.sfSymbolXmarkcirclefill} source={require("../assets/sf-symbol--xmarkcirclefill.png")} />
+              </View>
 
+              <View style={styles.inputLine}></View>
 
+              <View style={styles.resultContainer}>
+                {searchResults.map(item => (
+                    <TouchableOpacity onPress={() => handleGroupClick(item.id)}>
+                      <View
+                          style={[
+                            styles.groupContainer,
+                            item.Type === "Group" ? {height: 80} : null,
+                            item.Type === "Prep" ? styles.prepMargin : null
+                          ]}
+                      >
+                        <Text
+                            style={[
+                              styles.resultText,
+                              item.Type === "Group" ? [styles.boldText, styles.groupTitle] : null
+                            ]}
+                        >
+                          {item.Title}
+                        </Text>
+                        {item.Type === "Group" && (
+                            <Text style={styles.additionalText}>
+                              СПО, {extractCourseNumber(item.Title)} курс, очная форма
+                            </Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                ))}
+              </View>
 
-        <View style={styles.content}>
-          {searchQuery === '' && ( // Рендер текста, только если поле ввода пустое
-              <Text style={styles.contentText}>{`Приложение сможет найти расписание 
-    преподавателя, группы и аудитории 👍`}</Text>
-          )}
-        </View>
+              <View style={styles.content}>
+                {searchQuery === '' && (
+                    <Text style={styles.contentText}>{`Приложение сможет найти расписание преподавателя, группы и аудитории 👍`}</Text>
+                )}
+              </View>
+            </>
+        )}
       </View>
   );
 };
 
 const styles = StyleSheet.create({
   prepMargin: {
-    marginBottom: -50, // Установите вертикальный отступ снизу
+    marginBottom: -50,
   },
   groupTitle: {
-    marginTop: 15, // Установите верхний отступ для названия группы
+    marginTop: 15,
   },
   boldText: {
   },
@@ -216,9 +253,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
   },
   additionalText: {
-    marginTop: -4, // или другое значение, чтобы регулировать расстояние между текстами
-    fontSize: 12, // или другой размер шрифта, который вам подходит
-    color: 'grey', // или другой цвет, который вам подходит
+    marginTop: -4,
+    fontSize: 12,
+    color: 'grey',
   },
   inputLine: {
     marginTop: 15,
