@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   lessoncard: {
-    width: 375,
+    width: 400,
     height: 116,
   },
 });

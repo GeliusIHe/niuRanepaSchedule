@@ -220,11 +220,13 @@ const SearchFocusedIcon = ({
                 ))}
               </View>
 
-              <View style={styles.content}>
-                {searchQuery === '' && (
-                    <Text style={styles.contentText}>{`Приложение сможет найти расписание преподавателя, группы и аудитории 👍`}</Text>
-                )}
-              </View>
+              {searchQuery === '' ? (
+                  <View style={styles.content}>
+                    <Text style={styles.contentText}>
+                      {`Приложение сможет найти расписание преподавателя, группы и аудитории 👍`}
+                    </Text>
+                  </View>
+              ) : null}
             </>
         )}
       </View>
@@ -256,11 +258,11 @@ const styles = StyleSheet.create({
   },
   iconContainer2: {
     marginRight: 7,
-    marginTop: 9.5,
+    marginTop: 2.5,
   },
   text3: {
     color: '#007AFF',
-    marginTop: 15,
+    marginTop: 10,
     marginBottom: 9.5,
     marginLeft: -6,
     fontSize: 16,
@@ -287,9 +289,6 @@ const styles = StyleSheet.create({
   },
   inputLine: {
     marginTop: 15,
-    borderStyle: "solid",
-    borderColor: Color.colorDarkslategray_100,
-    borderBottomWidth: 0.5,
   },
   contentText: {
     fontSize: FontSize.footnoteRegular_size,

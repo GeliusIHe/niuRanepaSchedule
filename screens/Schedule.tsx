@@ -158,10 +158,12 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     // Загрузка закешированных данных
     async function loadCachedData() {
       try {
-        const cachedData = await AsyncStorage.getItem('scheduleData');
-        if (cachedData) {
-          setScheduleData(JSON.parse(cachedData));
-          setIsLoading(false); // скрыть индикатор загрузки после загрузки кешированных данных
+        if (!groupName) { // Если groupName пуст, значит поиск не используется
+          const cachedData = await AsyncStorage.getItem('scheduleData');
+          if (cachedData) {
+            setScheduleData(JSON.parse(cachedData));
+            setIsLoading(false); // скрыть индикатор загрузки после загрузки кешированных данных
+          }
         }
       } catch (error) {
         console.error('Error loading cached schedule:', error);
@@ -214,6 +216,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
           throw new Error(`HTTP error! Status: ${response.status}`);
         }
         const data = await response.json();
+        console.log(data)
         if (data) {
           setIsLoading(false); // Устанавливаем isLoading в false, если данные получены с сервера
         }
@@ -254,21 +257,13 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
   }
   return (
       <View style={styles.schedule}>
-        {groupName ? (
-            <View style={{ height: 100, backgroundColor: 'white', paddingLeft: 20, paddingTop: 20 }}>
-              <Text style={[{ color: '#007AFF', fontWeight: '800'}, styles.textTypo]}>{isGroup(groupName) ? 'Группа' : 'Преподаватель'}</Text>
-              <Text style={[{marginTop: 5, fontWeight: 'bold'}, styles.textTypo]}>{groupName}</Text>
-              <Text style={[{marginTop: 5, color: '#8E8E93'}, styles.textTypo]}>{isGroup(groupName) ? 'Информация о группе' : 'Информация о преподавателе'}</Text>
-            </View>
-        ) : (
-            <HeaderTitleIcon
-                prop="Не указано"
-                headerTitleIconPosition="absolute"
-                headerTitleIconMarginLeft={-187.5}
-                headerTitleIconTop={15}
-                headerTitleIconLeft="50%"
-            />
-        )}
+        <HeaderTitleIcon
+            prop="Не указано"
+            headerTitleIconPosition="absolute"
+            headerTitleIconMarginLeft={-187.5}
+            headerTitleIconTop={15}
+            headerTitleIconLeft="50%"
+        />
         <ScrollView
             ref={scrollViewRef}
             style={{
@@ -282,35 +277,42 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                 </View>
             )}
           </>
+          {!groupName ? null : (
+              <View style={{ height: 100, backgroundColor: 'white', paddingLeft: 20, paddingTop: 20 }}>
+                <Text style={[{ color: '#007AFF', fontWeight: '800' }, styles.textTypo]}>{isGroup(groupName) ? 'Группа' : 'Преподаватель'}</Text>
+                <Text style={[{ marginTop: 5, fontWeight: 'bold' }, styles.textTypo]}>{groupName}</Text>
+                <Text style={[{ marginTop: 5, color: '#8E8E93' }, styles.textTypo]}>{isGroup(groupName) ? 'Информация о группе' : 'Информация о преподавателе'}</Text>
+              </View>
+          )}
           {Object.entries(groupedScheduleData).length > 0 ? (
               Object.entries(groupedScheduleData).map(([date, lessonsForTheDay], index) => (
-              <React.Fragment key={index}>
-                <TableSubheadings noteTitle={formatHumanReadableDate(date)} />
-                {filterDuplicatePhysicalEducation(lessonsForTheDay).map((lesson, lessonIndex) => {
-                  const fullTypeName = getFullTypeName(lesson.type.split(',')[0]);
-                  const { address, roomNumber } = getAddressAndRoom(lesson.number);
-                  return (
-                      <LessonCard
-                          key={lessonIndex}
-                          prop={lesson.nf}
-                          prop1={lesson.kf}
-                          prop2={fullTypeName}
-                          preMedi={lesson.subject}
-                          prop3={`Аудитория ${roomNumber}, ${address}`}
-                          showBg={false}
-                          showBg1={false}
-                      />
-                  );
-                })}
-              </React.Fragment>
-          ))) : (
+                  <React.Fragment key={index}>
+                    <TableSubheadings noteTitle={formatHumanReadableDate(date)} />
+                    {filterDuplicatePhysicalEducation(lessonsForTheDay).map((lesson, lessonIndex) => {
+                      const fullTypeName = getFullTypeName(lesson.type.split(',')[0]);
+                      const { address, roomNumber } = getAddressAndRoom(lesson.number);
+                      return (
+                          <LessonCard
+                              key={lessonIndex}
+                              prop={lesson.nf}
+                              prop1={lesson.kf}
+                              prop2={fullTypeName}
+                              preMedi={lesson.subject}
+                              prop3={`${address}, Аудитория ${roomNumber} `}
+                              showBg={false}
+                              showBg1={false}
+                          />
+                      );
+                    })}
+                  </React.Fragment>
+              ))) : (
               <View style={styles.noDataContainer}>
                 <Text style={styles.noDataText}>
                   У данного преподавателя нет расписания за указанный период.
                 </Text>
               </View>
           )}
-          {Object.entries(groupedScheduleData).length > 0 && !showNotification && (
+          {Object.entries(groupedScheduleData).length > 0 && (
               <View
                   onLayout={(event) => {
                     const layout = event.nativeEvent.layout;
