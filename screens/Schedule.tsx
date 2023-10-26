@@ -10,6 +10,12 @@ import {Color, FontFamily, FontSize} from "../GlobalStyles";
 import {useGroupId} from "../components/GroupIdContext";
 
 type ScheduleItem = {
+  date: string;
+  timestart: string;
+  timefinish: string;
+  name: string;
+  aydit: string;
+
   kf: string;
   nf: string;
   number: string;
@@ -21,7 +27,8 @@ type ScheduleItem = {
 
 function groupByDate(lessons: ScheduleItem[]) {
   return lessons.reduce<{ [key: string]: ScheduleItem[] }>((acc, lesson) => {
-    (acc[lesson.xdt] = acc[lesson.xdt] || []).push(lesson);
+    // Используем lesson.date, если дата содержится в этом поле
+    (acc[lesson.date] = acc[lesson.date] || []).push(lesson);
     return acc;
   }, {});
 }
@@ -76,13 +83,12 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
   const groupedScheduleData = groupByDate(scheduleData);
 
   function formatHumanReadableDate(dateString: string): string {
+    const date = parseDate(dateString);
+
+    if (!date || isNaN(date.getTime())) return "Invalid Date"; // Проверка на корректность даты и на null
+
     const daysOfWeek = ["ВОСКРЕСЕНЬЕ", "ПОНЕДЕЛЬНИК", "ВТОРНИК", "СРЕДА", "ЧЕТВЕРГ", "ПЯТНИЦА", "СУББОТА"];
     const months = ["ЯНВАРЯ", "ФЕВРАЛЯ", "МАРТА", "АПРЕЛЯ", "МАЯ", "ИЮНЯ", "ИЮЛЯ", "АВГУСТА", "СЕНТЯБРЯ", "ОКТЯБРЯ", "НОЯБРЯ", "ДЕКАБРЯ"];
-
-    const date = new Date(dateString);
-
-    // Смещаем дату на два дня вперёд
-    date.setDate(date.getDate());
 
     const dayOfWeek = daysOfWeek[date.getDay()];
     const day = date.getDate();
@@ -90,6 +96,20 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
 
     return `${dayOfWeek}, ${day} ${month}`;
   }
+
+
+  function parseDate(dateString: string) {
+    // Заменяем точки на дефисы и создаем новый объект Date
+    const date = new Date(dateString.split('.').reverse().join('-'));
+
+    if (isNaN(date.getTime())) {
+      console.error(`Invalid date: ${dateString}`);
+      return null;
+    }
+
+    return date;
+  }
+
   function filterDuplicatePhysicalEducation(lessons: ScheduleItem[]): ScheduleItem[] {
     let isPhysicalEducationIncluded = false;
     return lessons.filter(lesson => {
@@ -171,85 +191,53 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     }
     // Загрузка данных с сервера
     async function fetchData() {
-      console.log('fetch data started')
       setIsLoading(true);
+
       const timeoutId = setTimeout(() => {
         setShowNotification(true);
       }, 5000);
-      console.log('fetch data goin to 1')
 
-
-      let groupIdString = actualGroupId ? String(actualGroupId) : "18792";
-      const baseUrl = "http://services.niu.ranepa.ru/API/public/";
       let actualGroupName = groupName ? groupName : "ИСПб-027";
-      console.log('fetch data goin to 2')
-
+      const startDate = formatDate(new Date());
+      const endDate = formatDate(addDays(new Date(), 7));
+      const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${startDate}&dfinish=${endDate}`;
 
       try {
-        let url, response, data;
-        if (!isGroup(actualGroupName)) {
-          const startDate = formatDate(new Date());
-          const endDate = formatDate(addDays(new Date(), 7));
-          console.log('fetch data goin to 3')
-          url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${startDate}&dfinish=${endDate}`;
-          response = await fetch(url);
-          data = await response.json();
-        } else {
-          let endpoint = "group/getSchedule";
-          console.log('fetch data goin to 4')
-
-          url = `${baseUrl}${endpoint}`;
-          response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id: groupIdString,
-              dateBegin: formatDate(new Date()),
-              dateEnd: formatDate(addDays(new Date(), 7))
-            }),
-          });
-          data = await response.json();
-        }
-        console.log('fetch data goin to 5')
+        const response = await fetch(url);
         if (!response.ok) {
           throw new Error(`HTTP error! Status: ${response.status}`);
         }
 
+        let data = await response.json();
+
+        // Очистка тайм-аута, так как данные были успешно получены
         clearTimeout(timeoutId);
-        setIsLoading(false);
 
-        // Проверка определения функций и данных
-        console.log('Checking function and data definitions:');
-        console.log('Is setScheduleData a function?', typeof setScheduleData === 'function');
-        console.log('Is AsyncStorage.setItem a function?', typeof AsyncStorage.setItem === 'function');
-        console.log('Data to be saved:', JSON.stringify(data));
+        // Убедитесь, что ключ resultKey существует в ответе от сервера
+        const resultKey = isGroup(actualGroupName) ? 'GetRaspGroupResult' : 'GetRaspPrepResult';
 
-        console.log('Data fetched:', data);
-
-        if (data) {
-          // Добавьте логи для отслеживания данных перед установкой в состояние
-          console.log('Setting schedule data:', data);
-          setScheduleData(data);
-           await AsyncStorage.setItem('scheduleData', JSON.stringify(data));
-          console.log('Schedule data updated');
+        if(data[resultKey] && data[resultKey].RaspItem) {
+          console.log("Processed data:", data[resultKey].RaspItem);
+          setScheduleData(data[resultKey].RaspItem);
         } else {
-          console.error('Received empty data from the server');
+          console.error("Unexpected data structure");
         }
-
-
-        console.log('fetch data going to 6');
-
       } catch (error) {
+        console.error("An error occurred while fetching data:", error);
         setShowNotification(true);
-        console.error('Error fetching the schedule:', error);
+        clearTimeout(timeoutId); // Очистка тайм-аута, так как произошла ошибка
       } finally {
         setIsLoading(false);
       }
     }
+
+
     loadCachedData(); // сначала загружаем кешированные данные
     fetchData(); // затем обновляем данные с сервера
 
+
   }, [actualGroupId]); // добавление groupId в зависимости useEffect
+
 
   if (isLoading) {
     return (
@@ -259,32 +247,24 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     );
   }
 
-  function transformLessonData(lesson: any) {
-    console.log('transform data started')
+  function extractLessonType(lessonName: string): string | undefined {
+    // Используем регулярные выражения для поиска и замены типов занятий
+    const lessonTypeMatch = lessonName.match(/\((.*?)\)/);
 
-    // Проверка и трансформация данных в зависимости от формата
-    if ('kf' in lesson) {
-      return {
-        nf: lesson.nf,
-        kf: lesson.kf,
-        subject: lesson.subject,
-        teacher: lesson.teacher,
-        // добавьте другие поля и преобразования по мере необходимости
-      };
-    } else if ('GetRaspPrepResult' in lesson) {
-      const raspItem = lesson.GetRaspPrepResult.RaspItem[0]; // адаптируйте индекс, если нужно
-      return {
-        nf: raspItem.timestart,
-        kf: raspItem.timefinish,
-        subject: raspItem.name,
-        teacher: raspItem.namegroup, // вы должны адаптировать, если это не соответствует
-        // добавьте другие поля и преобразования по мере необходимости
-      };
+    if (lessonTypeMatch && lessonTypeMatch[1]) {
+      let lessonType = lessonTypeMatch[1];
+
+      if (lessonType.includes("Практ.") || lessonType.includes("семин.")) {
+        return "Практика";
+      }
+
+      return lessonType;
+    } else {
+      // Возвращаем undefined, если тип занятия не найден
+      return undefined;
     }
-
-    // Возвращаем исходный урок, если ни одно из условий не выполнилось
-    return lesson;
   }
+
 
   function isGroup(groupName: any) {
     // Регулярное выражение для поиска чисел в строке
@@ -293,6 +273,23 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     // Проверка, содержит ли groupName числа
     return hasNumbers.test(groupName);
   }
+
+  function processLessonName(lessonName: string): { teacher: string, lessonInfo: string } {
+    // Разделяем строку по '<br />', чтобы отделить информацию об уроке от имени преподавателя
+    const splitLessonName = lessonName.split('<br />');
+
+    // Убираем все символы, начиная с первой открывающей скобки
+    let lessonInfo = splitLessonName[0].split('(')[0].trim();
+
+    // Получаем имя преподавателя или используем заполнитель, если имя отсутствует
+    const teacher = splitLessonName.length > 1 ? splitLessonName[1].trim() : "";
+
+    return {
+      teacher,
+      lessonInfo
+    };
+  }
+
   return (
       <View style={styles.schedule}>
         <HeaderTitleIcon
@@ -325,35 +322,29 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
           {Object.entries(groupedScheduleData).length > 0 ? (
               Object.entries(groupedScheduleData).map(([date, lessonsForTheDay], index) => (
                   <React.Fragment key={index}>
+                    {/* Выводим дату */}
                     <TableSubheadings noteTitle={formatHumanReadableDate(date)} />
-                    {filterDuplicatePhysicalEducation(lessonsForTheDay).map((lesson, lessonIndex) => {
+
+                    {/* Выводим уроки за день */}
+                    {lessonsForTheDay.map((lesson, lessonIndex) => {
                       // Трансформируем данные урока перед их использованием
-                      console.log('Lesson before transformation:', lesson);
-                      const transformedLesson = transformLessonData(lesson);
-                      if (typeof transformedLesson === 'undefined') {
-                        console.error('transformLessonData returned undefined for lesson:', lesson);
-                      }
-
-
-                      const fullTypeName = getFullTypeName(lesson.type.split(',')[0]);
-                      const { address, roomNumber } = getAddressAndRoom(lesson.number);
-
                       return (
                           <LessonCard
                               key={lessonIndex}
-                              prop={transformedLesson.nf}
-                              prop1={transformedLesson.kf}
-                              prop2={fullTypeName}
-                              preMedi={transformedLesson.subject}
-                              teacherName={transformedLesson.teacher}
-                              prop3={`${address}, Аудитория ${roomNumber} `}
+                              prop={lesson.timestart}
+                              prop1={lesson.timefinish}
+                              prop2={extractLessonType(lesson.name)}
+                              preMedi={processLessonName(lesson.name).lessonInfo}
+                              teacherName={processLessonName(lesson.name).teacher}
+                              prop3={`Аудитория ${getAddressAndRoom(lesson.aydit).roomNumber}, ${getAddressAndRoom(lesson.aydit).address}`}
                               showBg={false}
                               showBg1={false}
                           />
                       );
                     })}
                   </React.Fragment>
-              ))) : (
+              ))
+          ) : (
               <View style={styles.noDataContainer}>
                 <Text style={styles.noDataText}>
                   У данного преподавателя нет расписания за указанный период.

@@ -11,11 +11,6 @@ type LessonCardType = {
   prop3?: string;
   showBg?: boolean;
   showBg1?: boolean;
-
-  timestart: string;
-  timefinish: string;
-  name: string;
-  aydit: string;
 };
 
 const LessonCard = ({
