@@ -1,12 +1,17 @@
 
-import React from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
-import Svg, {Path, Rect} from "react-native-svg"
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, TextInput, Image } from 'react-native';
+import Modal from 'react-native-modal';
+import Svg, { Rect, Path } from 'react-native-svg';
 import TabBar from '../components/TabBar'; // Путь к вашему компоненту TabBar
 const Settings = () => {
+    const [modalVisible, setModalVisible] = useState(false);
     return (
         <View style={styles.container}>
-            <View style={styles.groupContainer}>
+            <TouchableOpacity
+                style={styles.groupContainer}
+                onPress={() => setModalVisible(true)}
+            >
                 <Svg width={30} height={30} viewBox="0 0 30 30">
                     <Rect width="30" height="30" rx="7" fill="#5AC8FA" />
                     <Path
@@ -18,7 +23,27 @@ const Settings = () => {
                 <View style={styles.arrowContainer}>
                     <Image source={require('../assets/Arrow.png')} style={styles.arrowIcon} />
                 </View>
-            </View>
+            </TouchableOpacity>
+
+            <Modal
+                isVisible={modalVisible}
+                onSwipeComplete={() => setModalVisible(false)}
+                swipeDirection={['down']}
+                style={styles.modal}
+            >
+                <View style={styles.modalContent}>
+                    <Text>Ваш контент здесь</Text>
+                    <TextInput placeholder="Введите текст" style={styles.input} />
+
+                    <TouchableOpacity
+                        style={styles.closeButton}
+                        onPress={() => setModalVisible(false)}
+                    >
+                        <Text style={styles.textStyle}>Закрыть</Text>
+                    </TouchableOpacity>
+                </View>
+            </Modal>
+
             <TabBar
                 imageDimensions={require("../assets/briefcaseGray.png")}
                 tabBarPosition="absolute"
@@ -33,6 +58,56 @@ const Settings = () => {
 };
 
 const styles = StyleSheet.create({
+    modal: {
+        justifyContent: 'flex-end',
+        margin: 0,
+    },
+    modalContent: {
+        backgroundColor: 'white',
+        padding: 22,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderRadius: 4,
+        borderColor: 'rgba(0, 0, 0, 0.1)',
+    },
+    closeButton: {
+        backgroundColor: '#2196F3',
+        borderRadius: 20,
+        padding: 10,
+        marginTop: 10,
+    },
+    textStyle: {
+        color: 'white',
+        fontWeight: 'bold',
+        textAlign: 'center',
+    },
+    input: {
+        height: 40,
+        borderColor: 'gray',
+        borderWidth: 1,
+        width: '100%',
+        marginTop: 10,
+    },
+    centeredView: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalView: {
+        margin: 20,
+        backgroundColor: 'white',
+        borderRadius: 20,
+        padding: 35,
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+        elevation: 5,
+    },
     container: {
         marginTop: 30,
         flex: 1,

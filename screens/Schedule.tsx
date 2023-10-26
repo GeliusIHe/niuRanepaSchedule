@@ -217,7 +217,6 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
         const resultKey = isGroup(actualGroupName) ? 'GetRaspGroupResult' : 'GetRaspPrepResult';
 
         if(data[resultKey] && data[resultKey].RaspItem) {
-          console.log("Processed data:", data[resultKey].RaspItem);
           setScheduleData(data[resultKey].RaspItem);
         } else {
           console.error("Unexpected data structure");
