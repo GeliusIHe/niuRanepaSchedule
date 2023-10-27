@@ -4,6 +4,7 @@ import {StyleSheet, Text, View, ImageSourcePropType, Dimensions, TouchableOpacit
 import { FontSize, FontFamily, Color, Padding } from "../GlobalStyles";
 import {useIsFocused, useNavigation, useNavigationState} from "@react-navigation/core";
 import Svg, {Path, Rect} from "react-native-svg";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type TabBarType = {
     imageDimensions?: ImageSourcePropType;

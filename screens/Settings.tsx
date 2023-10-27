@@ -1,11 +1,55 @@
 
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, TextInput, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, TextInput, Image, ActivityIndicator } from 'react-native';
 import Modal from 'react-native-modal';
 import Svg, { Rect, Path } from 'react-native-svg';
-import TabBar from '../components/TabBar'; // Путь к вашему компоненту TabBar
+import TabBar from '../components/TabBar';
+import AsyncStorage from "@react-native-async-storage/async-storage"; // Путь к вашему компоненту TabBar
 const Settings = () => {
     const [modalVisible, setModalVisible] = useState(false);
+    const [groupName, setGroupName] = useState('');
+    const [error, setError] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false); // состояние для отслеживания загрузки
+    const storeGroupName = async (value: string) => {
+        try {
+            await AsyncStorage.setItem('@group_name', value);
+        } catch (e) {
+            console.error('Error saving group name:', e);
+        }
+    };
+
+    const handleSubmit = () => {
+        setLoading(true); // начинаем загрузку
+        setError(null); // сбрасываем ошибку
+
+        const timeoutId = setTimeout(() => {
+            setLoading(false); // останавливаем загрузку
+            setError('Сервер не отвечает. Проверье подключение к интернету'); // устанавливаем ошибку таймаута
+        }, 5000); // устанавливаем таймаут 5 секунд
+
+        fetch(`http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?name=${groupName}`)
+            .then(response => response.json())
+            .then(data => {
+                clearTimeout(timeoutId); // очищаем таймаут, если получен ответ
+                setLoading(false); // останавливаем загрузку
+
+                if (data && Object.keys(data.GetNameUidForRaspResult).length === 0) {
+                    setError('Такой группы не существует'); // если группа не найдена
+                } else if (data) {
+                    storeGroupName(groupName); // сохраняем имя группы, если группа найдена
+                    setError(null);
+                    setModalVisible(false); // если группа найдена, закрываем модальное окно
+                }
+            })
+            .catch(error => {
+                clearTimeout(timeoutId); // очищаем таймаут при ошибке
+                setLoading(false); // останавливаем загрузку
+                setError('Произошла ошибка при получении данных.');
+            });
+    };
+
+
+
     return (
         <View style={styles.container}>
             <TouchableOpacity
@@ -31,15 +75,30 @@ const Settings = () => {
                 swipeDirection={['down']}
                 style={styles.modal}
             >
+                <View style={styles.headerBar}></View>
                 <View style={styles.modalContent}>
-                    <Text>Ваш контент здесь</Text>
-                    <TextInput placeholder="Введите текст" style={styles.input} />
+                    <Text style={styles.headerText}>Установка основной группы</Text>
+                    <Text style={styles.instructionText}>
+                        Введите название группы, которую вы будете видеть при заходе во вкладку “Расписание”.
+                    </Text>
+                    {error && <Text style={{color: 'red'}}>{error}</Text>}
+                    <TextInput
+                        placeholder="Название группы"
+                        style={styles.input}
+                        onChangeText={text => setGroupName(text)}
+                        value={groupName}
+                    />
 
                     <TouchableOpacity
                         style={styles.closeButton}
-                        onPress={() => setModalVisible(false)}
+                        onPress={handleSubmit}
+                        disabled={loading} // делаем кнопку неактивной при загрузке
                     >
-                        <Text style={styles.textStyle}>Закрыть</Text>
+                        {loading ? (
+                            <ActivityIndicator size="small" color="#0000ff" /> // отображаем индикатор загрузки
+                        ) : (
+                            <Text style={styles.textStyle}>Сохранить</Text>
+                        )}
                     </TouchableOpacity>
                 </View>
             </Modal>
@@ -65,26 +124,53 @@ const styles = StyleSheet.create({
     modalContent: {
         backgroundColor: 'white',
         padding: 22,
+        borderColor: 'rgba(0, 0, 0, 0.1)',
+    },
+    headerBar: {
+        backgroundColor: '#F8F8F8',
+        height: 60,
+        borderTopRightRadius: 15,
+        borderTopLeftRadius: 15,
+        width: '100%',
         justifyContent: 'center',
         alignItems: 'center',
-        borderRadius: 4,
-        borderColor: 'rgba(0, 0, 0, 0.1)',
+        borderBottomWidth: 0.02, // Толщина черной полоски
+        borderBottomColor: 'black',
+    },
+    headerText: {
+        fontSize: 25,
+        fontWeight: "bold",
+        textAlign: 'center',
+    },
+    instructionText: {
+        color: "gray",
+        fontSize: 16,
+        marginTop: 15,
+        marginBottom: 20,
+        textAlign: 'center',
     },
     closeButton: {
         backgroundColor: '#2196F3',
         borderRadius: 20,
+        height: 50,
+        width: '70%',
         padding: 10,
-        marginTop: 10,
+        marginTop: 40,
+        justifyContent: 'center',
+        alignSelf: 'center', // выравнивание по центру горизонтали
     },
     textStyle: {
-        color: 'white',
+        fontSize: 16,
         fontWeight: 'bold',
+        color: 'white',
         textAlign: 'center',
     },
     input: {
-        height: 40,
+        paddingLeft: 15,
+        borderWidth: 0.3, // Толщина черной полоски
+        borderRadius: 20,
+        height: 55,
         borderColor: 'gray',
-        borderWidth: 1,
         width: '100%',
         marginTop: 10,
     },

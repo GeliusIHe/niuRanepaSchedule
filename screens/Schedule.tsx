@@ -174,6 +174,8 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     return result;
   }
 
+
+// Кастомный хук для отслеживания изменений в AsyncStorage
   useEffect(() => {
     // Загрузка закешированных данных
     async function loadCachedData() {
@@ -190,15 +192,27 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       }
     }
     // Загрузка данных с сервера
-    async function fetchData() {
-      setIsLoading(true);
+      async function fetchData() {
+        setIsLoading(true);
 
-      const timeoutId = setTimeout(() => {
-        setShowNotification(true);
-      }, 5000);
+        const timeoutId = setTimeout(() => {
+          setShowNotification(true);
+        }, 5000);
 
-      let actualGroupName = groupName ? groupName : "ИСПб-027";
-      const startDate = formatDate(new Date());
+        const getData = async () => {
+          try {
+            const value = await AsyncStorage.getItem('@group_name');
+            return value || null;
+          } catch (e) {
+            console.error('Error reading data', e);
+            return null;
+          }
+        };
+
+        const actualGroupName = groupName || await getData();
+        console.log(`Загружено расписание группы ${actualGroupName}`);
+
+        const startDate = formatDate(new Date());
       const endDate = formatDate(addDays(new Date(), 7));
       const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${startDate}&dfinish=${endDate}`;
 

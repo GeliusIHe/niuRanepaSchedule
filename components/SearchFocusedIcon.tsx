@@ -235,17 +235,17 @@ const SearchFocusedIcon = ({
 
 const styles = StyleSheet.create({
   iconContainer: {
-    width: 40, // или другой размер, который вам подходит
-    height: 40, // или другой размер, который вам подходит
-    borderRadius: 20, // это сделает кружок
-    backgroundColor: '#fff', // или другой цвет, если вы хотите
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 20, // отступ справа от иконки
   },
   icon: {
-    width: 20, // или другой размер, который вам подходит
-    height: 20, // или другой размер, который вам подходит
+    width: 20,
+    height: 20,
     resizeMode: 'contain',
   },
   container2: {
