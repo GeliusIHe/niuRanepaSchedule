@@ -30,15 +30,15 @@ const Settings = () => {
         fetch(`http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?name=${groupName}`)
             .then(response => response.json())
             .then(data => {
-                clearTimeout(timeoutId); // очищаем таймаут, если получен ответ
-                setLoading(false); // останавливаем загрузку
+                clearTimeout(timeoutId);
 
                 if (data && Object.keys(data.GetNameUidForRaspResult).length === 0) {
-                    setError('Такой группы не существует'); // если группа не найдена
+                    setError('Такой группы не существует');
+                    setLoading(false)
                 } else if (data) {
-                    storeGroupName(groupName); // сохраняем имя группы, если группа найдена
+                    storeGroupName(groupName);
                     setError(null);
-                    setModalVisible(false); // если группа найдена, закрываем модальное окно
+                    setModalVisible(false);
                 }
             })
             .catch(error => {

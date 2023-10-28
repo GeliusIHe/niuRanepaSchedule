@@ -5,6 +5,7 @@ import { FontSize, FontFamily, Color, Padding } from "../GlobalStyles";
 import {useIsFocused, useNavigation, useNavigationState} from "@react-navigation/core";
 import Svg, {Path, Rect} from "react-native-svg";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {useGroup} from "./GroupContext";
 
 type TabBarType = {
     imageDimensions?: ImageSourcePropType;
@@ -41,6 +42,7 @@ const TabBar = ({
     const [activeTab, setActiveTab] = useState('Schedule'); // Устанавливаем начальное состояние
     const navigation = useNavigation();
     const navState = useNavigationState(state => state); // Определение navState
+    const { setGroupNameContext } = useGroup();
 
     useEffect(() => {
         const routeName = navState.routes[navState.index].name as 'Schedule' | 'Chat' | 'SearchTyping' | 'Settings';
@@ -70,7 +72,21 @@ const TabBar = ({
             styles.container,
             { width: tabBarWidth, height: tabBarHeight } // применение новых свойств
         ]}>
-            <TouchableOpacity onPress={() => handleTabPress('Schedule')}>
+            <TouchableOpacity onPress={() => {
+                const getData = async () => {
+                    try {
+                        const value = await AsyncStorage.getItem('@group_name');
+                        setGroupNameContext(value);
+                        console.log(value)
+                        return value || null;
+                    } catch (e) {
+                        console.error('Error reading data', e);
+                        return null;
+                    }
+                };
+                getData();
+                handleTabPress('Schedule');
+            }}>
                 <View style={styles.iconContainer}>
                     {activeTab === 'Schedule' ?
                         <Image style={styles.briefcaseIcon} source={require("../assets/briefcaseBlue.png")} /> :

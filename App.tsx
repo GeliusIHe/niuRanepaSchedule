@@ -15,6 +15,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import {View, Text, Pressable, TouchableOpacity, ScrollView, StatusBar} from "react-native";
 import {GroupIdProvider} from "./components/GroupIdContext";
 import Settings from "./screens/Settings";
+import {GroupProvider} from "./components/GroupContext";
 
 const App = () => {
   const [hideSplashScreen, setHideSplashScreen] = React.useState(true);
@@ -29,18 +30,20 @@ const App = () => {
 
   return (
     <>
-      <GroupIdProvider>
-        <NavigationContainer>
-          <StatusBar hidden={true} />
-          {hideSplashScreen ? (
-            <Stack.Navigator screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="Schedule" component={Schedule} />
-              <Stack.Screen name="SearchTyping" component={SearchTyping} />
-              <Stack.Screen name="Settings" component={Settings} />
-            </Stack.Navigator>
-          ) : null}
-        </NavigationContainer>
-      </GroupIdProvider>
+      <GroupProvider>
+        <GroupIdProvider>
+          <NavigationContainer>
+            <StatusBar hidden={true} />
+            {hideSplashScreen ? (
+                <Stack.Navigator screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="Schedule" component={Schedule} />
+                  <Stack.Screen name="SearchTyping" component={SearchTyping} />
+                  <Stack.Screen name="Settings" component={Settings} />
+                </Stack.Navigator>
+            ) : null}
+          </NavigationContainer>
+        </GroupIdProvider>
+      </GroupProvider>
     </>
   );
 };

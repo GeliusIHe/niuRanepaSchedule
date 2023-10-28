@@ -8,6 +8,7 @@ import TabBar from "../components/TabBar";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Color, FontFamily, FontSize} from "../GlobalStyles";
 import {useGroupId} from "../components/GroupIdContext";
+import {useGroup} from "../components/GroupContext";
 
 type ScheduleItem = {
   date: string;
@@ -79,6 +80,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
   const [endDate, setEndDate] = React.useState(addDays(new Date(), 7));
 
   const [scheduleData, setScheduleData] = React.useState<ScheduleItem[]>([]);
+  const [data, setData] = useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const groupedScheduleData = groupByDate(scheduleData);
 
@@ -173,11 +175,8 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     result.setDate(result.getDate() + days);
     return result;
   }
-
-
-// Кастомный хук для отслеживания изменений в AsyncStorage
+  const { groupNameContext, setGroupNameContext } = useGroup();
   useEffect(() => {
-    // Загрузка закешированных данных
     async function loadCachedData() {
       try {
         if (!groupName) { // Если groupName пуст, значит поиск не используется
@@ -191,28 +190,38 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
         console.error('Error loading cached schedule:', error);
       }
     }
+    loadCachedData(); // сначала загружаем кешированные данные
+
+  }, [actualGroupId]);
+// Кастомный хук для отслеживания изменений в AsyncStorage
+  useEffect(() => {
+
+    console.log('ку')
+    // Загрузка закешированных данных
+
     // Загрузка данных с сервера
-      async function fetchData() {
-        setIsLoading(true);
+    async function fetchData() {
+      setIsLoading(true);
 
-        const timeoutId = setTimeout(() => {
-          setShowNotification(true);
-        }, 5000);
+      const timeoutId = setTimeout(() => {
+        setShowNotification(true);
+      }, 5000);
 
-        const getData = async () => {
-          try {
-            const value = await AsyncStorage.getItem('@group_name');
-            return value || null;
-          } catch (e) {
-            console.error('Error reading data', e);
-            return null;
-          }
-        };
+      const getData = async () => {
+        try {
+          const value = await AsyncStorage.getItem('@group_name');
+          return value || null;
+        } catch (e) {
+          console.error('Error reading data', e);
+          return null;
+        }
+      };
 
-        const actualGroupName = groupName || await getData();
-        console.log(`Загружено расписание группы ${actualGroupName}`);
+      const actualGroupName = groupName || await getData();
+      console.log(`Загружено расписание группы ${actualGroupName}`);
+      setData(actualGroupName || null);
 
-        const startDate = formatDate(new Date());
+      const startDate = formatDate(new Date());
       const endDate = formatDate(addDays(new Date(), 7));
       const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${startDate}&dfinish=${endDate}`;
 
@@ -245,11 +254,10 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     }
 
 
-    loadCachedData(); // сначала загружаем кешированные данные
     fetchData(); // затем обновляем данные с сервера
 
 
-  }, [actualGroupId]); // добавление groupId в зависимости useEffect
+  }, [actualGroupId, groupNameContext]); // добавление groupId в зависимости useEffect
 
 
   if (isLoading) {
@@ -302,11 +310,10 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       lessonInfo
     };
   }
-
   return (
       <View style={styles.schedule}>
         <HeaderTitleIcon
-            prop="Не указано"
+            prop={`${data}`}
             headerTitleIconPosition="absolute"
             headerTitleIconMarginLeft={-187.5}
             headerTitleIconTop={15}
