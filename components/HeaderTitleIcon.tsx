@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { Image } from "expo-image";
-import { StyleSheet, Text, View } from "react-native";
+import {ActivityIndicator, StyleSheet, Text, View} from "react-native";
 import { FontFamily, FontSize, Color, Padding } from "../GlobalStyles";
 
 type HeaderTitleIconType = {
@@ -49,7 +49,11 @@ const HeaderTitleIcon = ({
         <Text style={[styles.leftTitle, styles.textTypo]}>Расписание</Text>
       </View>
       <View style={[styles.title, styles.accessoryFlexBox]}>
-        <Text style={[styles.text, styles.textTypo]}>{prop}</Text>
+        {prop === "loading" ? (
+            <ActivityIndicator size="small" color="#0000ff" />
+        ) : (
+            <Text style={[styles.text, styles.textTypo]}>{prop}</Text>
+        )}
       </View>
       <View style={[styles.rightAccessory, styles.accessoryFlexBox]}>
         <View style={[styles.iconsleft, styles.accessoryFlexBox]}>

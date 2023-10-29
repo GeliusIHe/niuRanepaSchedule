@@ -1,6 +1,6 @@
 import * as React from "react";
 import {useEffect, useState} from "react";
-import {ActivityIndicator, Button, ScrollView, StyleSheet, Text, View} from "react-native";
+import {ActivityIndicator, Button, ScrollView, StyleSheet, Text, TouchableOpacity, View} from "react-native";
 import TableSubheadings from "../components/TableSubheadings";
 import LessonCard from "../components/LessonCard";
 import HeaderTitleIcon from "../components/HeaderTitleIcon";
@@ -34,16 +34,6 @@ function groupByDate(lessons: ScheduleItem[]) {
   }, {});
 }
 
-function getFullTypeName(type: string): string {
-  switch (type) {
-    case 'Лек':
-      return 'Лекция';
-    case 'Прак':
-      return 'Практика';
-    default:
-      return type; // Возвращаем исходный тип, если он не соответствует ни одному из вышеуказанных
-  }
-}
 function getAddressAndRoom(room: string): { address: string, roomNumber: string } {
   if (room.startsWith('П8-')) {
     return {
@@ -112,46 +102,54 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     return date;
   }
 
-  function filterDuplicatePhysicalEducation(lessons: ScheduleItem[]): ScheduleItem[] {
-    let isPhysicalEducationIncluded = false;
-    return lessons.filter(lesson => {
-      if (lesson.subject === 'Физическая культура') {
-        if (isPhysicalEducationIncluded) {
+  function filterPhysicalEducationLessons(scheduleData: any[]) {
+    let isPhysicalEducationFound = false;
+
+    return scheduleData.filter((lesson) => {
+      if (lesson.name.includes("Физическая культура")) {
+        if (isPhysicalEducationFound) {
           return false;
         }
-        isPhysicalEducationIncluded = true;
+        isPhysicalEducationFound = true;
       }
       return true;
     });
   }
-  async function loadMoreData() {
-    const groupIdString = actualGroupId ? String(actualGroupId) : "18792";
 
-    const startDateForNextFetch = addDays(endDate, 1);
-    const newEndDate = addDays(startDateForNextFetch, 6);
-    setEndDate(newEndDate);
+  async function loadMoreData() {
     setIsFetchingMore(true);
 
+    const timeoutId = setTimeout(() => {
+      setShowNotification(true);
+      console.log('notif')
+    }, 5000); // задаем тайм-аут, как в fetchData
+
     try {
-      const response = await fetch('http://services.niu.ranepa.ru/API/public/group/getSchedule', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id: groupIdString, // используется условный оператор для установки id
-          dateBegin: formatDate(startDateForNextFetch),
-          dateEnd: formatDate(newEndDate)
-        }),
-      });
+      const value = await AsyncStorage.getItem('@group_name');
+      const actualGroupName = groupName || value || null;
+      const startDateForNextFetch = addDays(endDate, 1);
+      const newEndDate = addDays(startDateForNextFetch, 6);
+      setEndDate(newEndDate);
+      const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${formatDate(startDateForNextFetch)}&dfinish=${formatDate(newEndDate)}`;
+
+      const response = await fetch(url);
 
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
 
-      const newData = await response.json();
-      setScheduleData(prevData => [...prevData, ...newData]);
+      clearTimeout(timeoutId); // Очистка тайм-аута, так как данные были успешно получены
 
+      let newData = await response.json();
+      console.log(newData)
+      const resultKey = isGroup(actualGroupName) ? 'GetRaspGroupResult' : 'GetRaspPrepResult';
+      if (newData[resultKey] && newData[resultKey].RaspItem) {
+        // Если RaspItem является массивом массивов, сделайте его "плоским"
+        const flatNewData = [].concat(...newData[resultKey].RaspItem);
+        setScheduleData(prevData => [...prevData, ...flatNewData]);
+      } else {
+        console.error("Unexpected data structure");
+      }
       setTimeout(() => {
         if (scrollViewRef.current && scrollViewRef.current.scrollTo) {
           scrollViewRef.current.scrollTo({ x: 0, y: loadMoreButtonPosition, animated: true });
@@ -159,6 +157,8 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       }, 100);
     } catch (error) {
       console.error('Error fetching more schedule:', error);
+      setShowNotification(true);
+      clearTimeout(timeoutId); // Очистка тайм-аута, так как произошла ошибка
     } finally {
       setIsFetchingMore(false);
     }
@@ -195,16 +195,12 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
   }, [actualGroupId]);
 // Кастомный хук для отслеживания изменений в AsyncStorage
   useEffect(() => {
-
-    console.log('ку')
-    // Загрузка закешированных данных
-
-    // Загрузка данных с сервера
     async function fetchData() {
       setIsLoading(true);
 
       const timeoutId = setTimeout(() => {
         setShowNotification(true);
+        console.log('notif')
       }, 5000);
 
       const getData = async () => {
@@ -218,8 +214,8 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       };
 
       const actualGroupName = groupName || await getData();
-      console.log(`Загружено расписание группы ${actualGroupName}`);
-      setData(actualGroupName || null);
+      console.log(`Загружено расписание ${actualGroupName}`);
+      setData((actualGroupName || "").split(" ")[0] || null);
 
       const startDate = formatDate(new Date());
       const endDate = formatDate(addDays(new Date(), 7));
@@ -240,7 +236,15 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
         const resultKey = isGroup(actualGroupName) ? 'GetRaspGroupResult' : 'GetRaspPrepResult';
 
         if(data[resultKey] && data[resultKey].RaspItem) {
-          setScheduleData(data[resultKey].RaspItem);
+          const filteredScheduleData = filterPhysicalEducationLessons(data[resultKey].RaspItem);
+          setScheduleData(filteredScheduleData);
+          // Кэширование данных расписания
+          try {
+            await AsyncStorage.setItem('scheduleData', JSON.stringify(data[resultKey].RaspItem));
+          } catch (error) {
+            console.error('Error caching schedule data:', error);
+          }
+
         } else {
           console.error("Unexpected data structure");
         }
@@ -313,7 +317,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
   return (
       <View style={styles.schedule}>
         <HeaderTitleIcon
-            prop={`${data}`}
+            prop={data || "loading"}
             headerTitleIconPosition="absolute"
             headerTitleIconMarginLeft={-187.5}
             headerTitleIconTop={15}
@@ -342,7 +346,6 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
           {Object.entries(groupedScheduleData).length > 0 ? (
               Object.entries(groupedScheduleData).map(([date, lessonsForTheDay], index) => (
                   <React.Fragment key={index}>
-                    {/* Выводим дату */}
                     <TableSubheadings noteTitle={formatHumanReadableDate(date)} />
 
                     {/* Выводим уроки за день */}
@@ -367,7 +370,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
           ) : (
               <View style={styles.noDataContainer}>
                 <Text style={styles.noDataText}>
-                  У данного преподавателя нет расписания за указанный период.
+                  Расписания за указанный период не найдено.
                 </Text>
               </View>
           )}
@@ -378,10 +381,18 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                     setLoadMoreButtonPosition(layout.y);
                   }}
               >
-                <Button
-                    title={isFetchingMore ? "Загрузка..." : "Загрузить еще"}
+                <TouchableOpacity
                     onPress={loadMoreData}
-                />
+                    disabled={isFetchingMore}
+                    style={styles.button}
+                >
+                  <View style={styles.buttoncontainer}>
+                    {isFetchingMore
+                        ? <ActivityIndicator color="white" />
+                        : <Text style={styles.buttontext}>ЗАГРУЗИТЬ ЕЩЕ</Text>
+                    }
+                  </View>
+                </TouchableOpacity>
               </View>
           )}
         </ScrollView>
@@ -399,6 +410,19 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
 };
 
 const styles = StyleSheet.create({
+  button: {
+    backgroundColor: '#2296f3',
+    padding: 10,
+  },
+  buttoncontainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  buttontext: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
   noDataContainer: {
     flex: 1,
     justifyContent: 'center',

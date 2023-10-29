@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, TextInput, Image, ActivityIndicator } from 'react-native';
 import Modal from 'react-native-modal';
 import Svg, { Rect, Path } from 'react-native-svg';
@@ -24,7 +24,7 @@ const Settings = () => {
 
         const timeoutId = setTimeout(() => {
             setLoading(false); // останавливаем загрузку
-            setError('Сервер не отвечает. Проверье подключение к интернету'); // устанавливаем ошибку таймаута
+            setError('Сервер не отвечает. Проверьте подключение к интернету'); // устанавливаем ошибку таймаута
         }, 5000); // устанавливаем таймаут 5 секунд
 
         fetch(`http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?name=${groupName}`)
@@ -32,13 +32,25 @@ const Settings = () => {
             .then(data => {
                 clearTimeout(timeoutId);
 
-                if (data && Object.keys(data.GetNameUidForRaspResult).length === 0) {
-                    setError('Такой группы не существует');
-                    setLoading(false)
-                } else if (data) {
-                    storeGroupName(groupName);
+                const results = Array.isArray(data.GetNameUidForRaspResult.ItemRaspUID)
+                    ? data.GetNameUidForRaspResult.ItemRaspUID
+                    : [data.GetNameUidForRaspResult.ItemRaspUID];
+
+                const prepResults = results.filter((item: { Type: string; }) => item.Type === "Prep");
+                const groupResult = results.find((item: { Type: string; }) => item.Type === "Group");
+
+                if (prepResults.length > 1) {
+                    setError('Найдено слишком много преподавателей. Уточните запрос.');
+                    setLoading(false);
+                } else if (prepResults.length === 1 || groupResult) {
+                    const result = prepResults.length ? prepResults[0] : groupResult;
+                    const formattedTitle = result.Title.replace(/ {2,}/g, ' '); // Убираем лишние пробелы
+                    storeGroupName(formattedTitle);
                     setError(null);
                     setModalVisible(false);
+                } else {
+                    setError(`Такой группы или преподавателя не существует. Полученные данные: ${JSON.stringify(data)}`);
+                    setLoading(false);
                 }
             })
             .catch(error => {
@@ -48,6 +60,20 @@ const Settings = () => {
             });
     };
 
+    const inputRef = useRef<TextInput>(null); // указываем TextInput как тип ссылки
+
+    useEffect(() => {
+        if (modalVisible) {
+            const timer = setTimeout(() => {
+                if (inputRef.current) {
+                    inputRef.current.focus();
+                }
+            }, 100); // устанавливаем задержку в 100 мс
+
+            // не забываем очистить таймер
+            return () => clearTimeout(timer);
+        }
+    }, [modalVisible]);
 
 
     return (
@@ -63,7 +89,7 @@ const Settings = () => {
                         fill="white"
                     />
                 </Svg>
-                <Text style={styles.groupText}>Группа по умолчанию</Text>
+                <Text style={styles.groupText}>Расписание по умолчанию</Text>
                 <View style={styles.arrowContainer}>
                     <Image source={require('../assets/Arrow.png')} style={styles.arrowIcon} />
                 </View>
@@ -74,6 +100,7 @@ const Settings = () => {
                 onSwipeComplete={() => setModalVisible(false)}
                 swipeDirection={['down']}
                 style={styles.modal}
+                onBackdropPress={() => setModalVisible(false)} // закрыть модальное окно при нажатии вне его
             >
                 <View style={styles.headerBar}></View>
                 <View style={styles.modalContent}>
@@ -83,6 +110,7 @@ const Settings = () => {
                     </Text>
                     {error && <Text style={{color: 'red'}}>{error}</Text>}
                     <TextInput
+                        ref={inputRef}
                         placeholder="Название группы"
                         style={styles.input}
                         onChangeText={text => setGroupName(text)}
@@ -102,7 +130,6 @@ const Settings = () => {
                     </TouchableOpacity>
                 </View>
             </Modal>
-
             <TabBar
                 imageDimensions={require("../assets/briefcaseGray.png")}
                 tabBarPosition="absolute"
