@@ -34,21 +34,24 @@ function groupByDate(lessons: ScheduleItem[]) {
   }, {});
 }
 
-function getAddressAndRoom(room: string): { address: string, roomNumber: string } {
+function getAddressAndRoom(room: string): { address: JSX.Element; roomNumber: string } {
   if (room.startsWith('П8-')) {
     return {
-      address: 'Пушкина 8',
+      address: <Text>
+        Пушкина <Text style={{fontWeight: 'bold'}}>8</Text>
+      </Text>,
       roomNumber: room.replace('П8-', ''),
     };
   } else if (room.startsWith('СО')) {
     return {
-      address: 'Пушкина 10',
+      address: <Text>
+        Пушкина <Text style={{fontWeight: 'bold'}}>8</Text>
+      </Text>,
       roomNumber: room.replace('СО ', ''),
     };
   } else {
-    // Если формат комнаты не соответствует вышеуказанным, возвращаем исходное значение
     return {
-      address: '',
+      address: <Text>Не распознано</Text>,
       roomNumber: room,
     };
   }
@@ -121,13 +124,12 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
 
     const timeoutId = setTimeout(() => {
       setShowNotification(true);
-      console.log('notif')
-    }, 5000); // задаем тайм-аут, как в fetchData
+    }, 5000);
 
     try {
       const value = await AsyncStorage.getItem('@group_name');
       const actualGroupName = groupName || value || null;
-      const startDateForNextFetch = addDays(endDate, 1);
+      const startDateForNextFetch = addDays(endDate, 2);
       const newEndDate = addDays(startDateForNextFetch, 6);
       setEndDate(newEndDate);
       const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${formatDate(startDateForNextFetch)}&dfinish=${formatDate(newEndDate)}`;
@@ -138,15 +140,15 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
 
-      clearTimeout(timeoutId); // Очистка тайм-аута, так как данные были успешно получены
+      clearTimeout(timeoutId);
 
       let newData = await response.json();
       console.log(newData)
       const resultKey = isGroup(actualGroupName) ? 'GetRaspGroupResult' : 'GetRaspPrepResult';
       if (newData[resultKey] && newData[resultKey].RaspItem) {
-        // Если RaspItem является массивом массивов, сделайте его "плоским"
         const flatNewData = [].concat(...newData[resultKey].RaspItem);
-        setScheduleData(prevData => [...prevData, ...flatNewData]);
+        const filteredScheduleData = filterPhysicalEducationLessons(flatNewData);
+        setScheduleData(prevData => [...prevData, ...filteredScheduleData]);
       } else {
         console.error("Unexpected data structure");
       }
@@ -158,7 +160,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     } catch (error) {
       console.error('Error fetching more schedule:', error);
       setShowNotification(true);
-      clearTimeout(timeoutId); // Очистка тайм-аута, так как произошла ошибка
+      clearTimeout(timeoutId);
     } finally {
       setIsFetchingMore(false);
     }
@@ -179,18 +181,18 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
   useEffect(() => {
     async function loadCachedData() {
       try {
-        if (!groupName) { // Если groupName пуст, значит поиск не используется
+        if (!groupName) {
           const cachedData = await AsyncStorage.getItem('scheduleData');
           if (cachedData) {
             setScheduleData(JSON.parse(cachedData));
-            setIsLoading(false); // скрыть индикатор загрузки после загрузки кешированных данных
+            setIsLoading(false);
           }
         }
       } catch (error) {
         console.error('Error loading cached schedule:', error);
       }
     }
-    loadCachedData(); // сначала загружаем кешированные данные
+    loadCachedData();
 
   }, [actualGroupId]);
 // Кастомный хук для отслеживания изменений в AsyncStorage
@@ -359,7 +361,11 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                               prop2={extractLessonType(lesson.name)}
                               preMedi={processLessonName(lesson.name).lessonInfo}
                               teacherName={processLessonName(lesson.name).teacher}
-                              prop3={`Аудитория ${getAddressAndRoom(lesson.aydit).roomNumber}, ${getAddressAndRoom(lesson.aydit).address}`}
+                              prop3={
+                                <Text>
+                                  Аудитория <Text style={{fontWeight: 'bold'}}>{getAddressAndRoom(lesson.aydit).roomNumber}</Text>, {getAddressAndRoom(lesson.aydit).address}
+                                </Text>
+                              }
                               showBg={false}
                               showBg1={false}
                           />

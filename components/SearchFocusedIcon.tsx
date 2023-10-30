@@ -290,23 +290,20 @@ const styles = StyleSheet.create({
   inputLine: {
     marginTop: 15,
   },
+  content: {
+    flex: 1,
+    backgroundColor: Color.lightBackgroundQuaternary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Padding.p_xl,
+    marginBottom: 100,
+  },
   contentText: {
     fontSize: FontSize.footnoteRegular_size,
     letterSpacing: 0,
     lineHeight: 18,
     color: Color.lightLabelSecondary,
-    textAlign: "center",
-    marginLeft: 30,},
-  content: {
-    position: "absolute",
-    top: 368,
-    left: 0,
-    backgroundColor: Color.lightBackgroundQuaternary,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: Padding.p_xl,
-    width: 375,
+    textAlign: 'center',
   },
   mainContainer: {
     flex: 1,
