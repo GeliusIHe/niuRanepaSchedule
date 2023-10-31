@@ -4,7 +4,8 @@ import { View, Text, TouchableOpacity, StyleSheet, TextInput, Image, ActivityInd
 import Modal from 'react-native-modal';
 import Svg, { Rect, Path } from 'react-native-svg';
 import TabBar from '../components/TabBar';
-import AsyncStorage from "@react-native-async-storage/async-storage"; // Путь к вашему компоненту TabBar
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {useGroup} from "../components/GroupContext"; // Путь к вашему компоненту TabBar
 const Settings = () => {
     const [modalVisible, setModalVisible] = useState(false);
     const [groupName, setGroupName] = useState('');
@@ -17,6 +18,7 @@ const Settings = () => {
             console.error('Error saving group name:', e);
         }
     };
+    const { setGroupNameContext } = useGroup();
 
     const handleSubmit = () => {
         setLoading(true); // начинаем загрузку
@@ -29,7 +31,7 @@ const Settings = () => {
 
         fetch(`http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?name=${groupName}`)
             .then(response => response.json())
-            .then(data => {
+            .then(async data => {
                 clearTimeout(timeoutId);
 
                 const results = Array.isArray(data.GetNameUidForRaspResult.ItemRaspUID)
@@ -45,6 +47,8 @@ const Settings = () => {
                 } else if (prepResults.length === 1 || groupResult) {
                     const result = prepResults.length ? prepResults[0] : groupResult;
                     const formattedTitle = result.Title.replace(/ {2,}/g, ' '); // Убираем лишние пробелы
+                    const value = AsyncStorage.getItem('@group_name');
+                    setGroupNameContext(await value);
                     storeGroupName(formattedTitle);
                     setError(null);
                     setModalVisible(false);
@@ -68,9 +72,8 @@ const Settings = () => {
                 if (inputRef.current) {
                     inputRef.current.focus();
                 }
-            }, 100); // устанавливаем задержку в 100 мс
+            }, 100);
 
-            // не забываем очистить таймер
             return () => clearTimeout(timer);
         }
     }, [modalVisible]);

@@ -274,7 +274,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     );
   }
 
-  function extractLessonType(lessonName: string): string | undefined {
+  function extractLessonType(lessonName: string = ""): string | undefined {
     // Используем регулярные выражения для поиска и замены типов занятий
     const lessonTypeMatch = lessonName.match(/\((.*?)\)/);
 

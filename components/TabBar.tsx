@@ -80,7 +80,6 @@ const TabBar = ({
                 const getData = async () => {
                     try {
                         const value = await AsyncStorage.getItem('@group_name');
-                        setGroupNameContext(value);
                         console.log(value)
                         return value || null;
                     } catch (e) {
