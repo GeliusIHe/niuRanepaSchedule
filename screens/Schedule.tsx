@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Color, FontFamily, FontSize} from "../GlobalStyles";
 import {useGroupId} from "../components/GroupIdContext";
 import {useGroup} from "../components/GroupContext";
+import {find} from "lodash";
 
 type ScheduleItem = {
   date: string;
@@ -45,7 +46,7 @@ function getAddressAndRoom(room: string): { address: JSX.Element; roomNumber: st
   } else if (room.startsWith('СО')) {
     return {
       address: <Text>
-        Пушкина <Text style={{fontWeight: 'bold'}}>8</Text>
+        Пушкина <Text style={{fontWeight: 'bold'}}>10</Text>
       </Text>,
       roomNumber: room.replace('СО ', ''),
     };
@@ -104,6 +105,34 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
 
     return date;
   }
+  type Lesson = {
+    date: string;
+    timestart: string;
+    timefinish: string;
+    name: string;
+    aydit: string;
+
+    kf: string;
+    nf: string;
+    number: string;
+    subject: string;
+    teacher: string;
+    type: string;
+    xdt: string;
+  };
+
+  function filterScheduleBySubject(subject: string, schedule: Lesson[]): Lesson[] {
+    // Сначала найдем все уникальные даты, когда есть урок по выбранному предмету
+    const subjectDates = schedule
+        .filter(lesson => lesson.name.includes(subject))
+        .map(lesson => lesson.date);
+
+    // Теперь вернем все уроки, которые проводятся в эти даты
+    return schedule.filter(lesson => subjectDates.includes(lesson.date));
+  }
+
+
+
 
   function filterPhysicalEducationLessons(scheduleData: any[]) {
     let isPhysicalEducationFound = false;
@@ -239,8 +268,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
 
         if(data[resultKey] && data[resultKey].RaspItem) {
           const filteredScheduleData = filterPhysicalEducationLessons(data[resultKey].RaspItem);
-          setScheduleData(filteredScheduleData);
-          // Кэширование данных расписания
+          setScheduleData(filterScheduleBySubject('', filteredScheduleData));
           try {
             await AsyncStorage.setItem('scheduleData', JSON.stringify(data[resultKey].RaspItem));
           } catch (error) {
@@ -274,7 +302,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     );
   }
 
-  function extractLessonType(lessonName: string = ""): string | undefined {
+  function extractLessonType(lessonName: string = " "): string | undefined {
     // Используем регулярные выражения для поиска и замены типов занятий
     const lessonTypeMatch = lessonName.match(/\((.*?)\)/);
 
