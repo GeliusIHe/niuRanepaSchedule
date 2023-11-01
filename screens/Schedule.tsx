@@ -9,7 +9,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Color, FontFamily, FontSize} from "../GlobalStyles";
 import {useGroupId} from "../components/GroupIdContext";
 import {useGroup} from "../components/GroupContext";
-import {find} from "lodash";
 
 type ScheduleItem = {
   date: string;

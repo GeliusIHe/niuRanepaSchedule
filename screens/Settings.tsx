@@ -5,10 +5,10 @@ import Modal from 'react-native-modal';
 import Svg, { Rect, Path } from 'react-native-svg';
 import TabBar from '../components/TabBar';
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {useGroup} from "../components/GroupContext"; // Путь к вашему компоненту TabBar
+import {useDispatch, useSelector} from "react-redux";
+import {setGroupName} from "../slices/groupSlice";
 const Settings = () => {
     const [modalVisible, setModalVisible] = useState(false);
-    const [groupName, setGroupName] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false); // состояние для отслеживания загрузки
     const storeGroupName = async (value: string) => {
@@ -18,7 +18,10 @@ const Settings = () => {
             console.error('Error saving group name:', e);
         }
     };
-    const { setGroupNameContext } = useGroup();
+    const dispatch = useDispatch();
+    const groupName = useSelector((state) => state.group);
+    console.log(groupName)
+
 
     const handleSubmit = () => {
         setLoading(true); // начинаем загрузку
@@ -48,7 +51,7 @@ const Settings = () => {
                     const result = prepResults.length ? prepResults[0] : groupResult;
                     const formattedTitle = result.Title.replace(/ {2,}/g, ' '); // Убираем лишние пробелы
                     const value = AsyncStorage.getItem('@group_name');
-                    setGroupNameContext(await value);
+                    dispatch(setGroupName(await value));
                     storeGroupName(formattedTitle);
                     setError(null);
                     setModalVisible(false);

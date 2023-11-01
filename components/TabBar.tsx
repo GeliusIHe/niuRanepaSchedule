@@ -27,12 +27,7 @@ const getStyleValue = (key: string, value: string | number | undefined) => {
 const { width } = Dimensions.get('window');
 
 const TabBar = ({
-                    imageDimensions,
-                    tabBarPosition,
-                    tabBarTop,
-                    tabBarLeft,
                     textColor,
-                    tabBarWidth, // новое свойство
                     tabBarHeight, // новое свойство
                 }: TabBarType) => {
   const tabBarStyle = useMemo(() => {
@@ -45,7 +40,6 @@ const TabBar = ({
     const [activeTab, setActiveTab] = useState('Schedule'); // Устанавливаем начальное состояние
     const navigation = useNavigation();
     const navState = useNavigationState(state => state); // Определение navState
-    const { setGroupNameContext } = useGroup();
 
 
     useEffect(() => {

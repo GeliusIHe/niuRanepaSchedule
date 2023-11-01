@@ -13,6 +13,8 @@ import Settings from "./screens/Settings";
 import DefaultScheduleSet from "./screens/DefaultScheduleSet";
 import {GroupIdProvider} from "./components/GroupIdContext";
 import {GroupProvider} from "./components/GroupContext";
+import store from './store';
+import { Provider } from 'react-redux';
 
 const Stack = createNativeStackNavigator();
 
@@ -96,7 +98,7 @@ const App = () => {
 
   return (
       <GroupProvider>
-          <GroupIdProvider>
+          <Provider store={store}>
               <NavigationContainer>
                   <StatusBar hidden={true} />
                   <Stack.Navigator initialRouteName={initialScreen} screenOptions={{ headerShown: false }}>
@@ -107,7 +109,7 @@ const App = () => {
                       <Stack.Screen name="DefaultScheduleSet" component={DefaultScheduleSet} />
                   </Stack.Navigator>
               </NavigationContainer>
-          </GroupIdProvider>
+          </Provider>
       </GroupProvider>
   );
 };
