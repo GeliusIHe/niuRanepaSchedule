@@ -39,7 +39,7 @@ const HeaderTitleIcon = ({
     headerTitleIconLeft,
   ]);
   const [modalVisible, setModalVisible] = useState(false);
-  const [groupName, setGroupName] = useState('');
+  const [subjectName, setSubjectName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const inputRef = useRef<TextInput>(null); // указываем TextInput как тип ссылки
@@ -91,10 +91,10 @@ const HeaderTitleIcon = ({
             {error && <Text style={{color: 'red'}}>{error}</Text>}
             <TextInput
                 ref={inputRef}
-                placeholder="Название группы"
+                placeholder="Название предмета"
                 style={styles.input}
-                onChangeText={text => setGroupName(text)}
-                value={groupName}
+                onChangeText={text => setSubjectName(text)}
+                value={subjectName}
             />
 
             <TouchableOpacity

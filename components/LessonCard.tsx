@@ -8,7 +8,7 @@ type LessonCardType = {
   prop2?: string;
   preMedi?: string;
   teacherName: string;
-  prop3?: string;
+  prop3?: React.ReactNode;
   showBg?: boolean;
   showBg1?: boolean;
 };

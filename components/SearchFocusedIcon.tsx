@@ -29,19 +29,19 @@ const getStyleValue = (key: string, value: string | number | undefined) => {
   return { [key]: value === "unset" ? undefined : value };
 };
 const SearchFocusedIcon = ({
-  showCursor1,
-  searchFocusedIconPosition,
-  searchFocusedIconBorderStyle,
-  searchFocusedIconBorderColor,
-  searchFocusedIconBorderBottomWidth,
-  searchFocusedIconTop,
-  searchFocusedIconLeft,
-  inputFieldJustifyContent,
-  textWidth,
-  textWidth1,
-  textFlex,
-  textLineHeight,
-}: SearchFocusedIconType) => {
+                             showCursor1,
+                             searchFocusedIconPosition,
+                             searchFocusedIconBorderStyle,
+                             searchFocusedIconBorderColor,
+                             searchFocusedIconBorderBottomWidth,
+                             searchFocusedIconTop,
+                             searchFocusedIconLeft,
+                             inputFieldJustifyContent,
+                             textWidth,
+                             textWidth1,
+                             textFlex,
+                             textLineHeight,
+                           }: SearchFocusedIconType) => {
   const searchFocusedIconStyle = useMemo(() => {
     return {
       ...getStyleValue("position", searchFocusedIconPosition),
@@ -94,6 +94,11 @@ const SearchFocusedIcon = ({
       ...getStyleValue("flex", textFlex),
     };
   }, [textWidth1, textFlex]);
+  interface GroupResult {
+    Title: string;
+    Type: string;
+    id: number;
+  }
 
   const debouncedSearch = debounce((query: string) => {
     fetch(`http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?name=${query}`)
@@ -106,15 +111,66 @@ const SearchFocusedIcon = ({
         .then(data => {
           const rawData = data.GetNameUidForRaspResult?.ItemRaspUID || [];
 
-          // Проверка, является ли результат объектом, и если да, преобразование его в массив
           const results = Array.isArray(rawData) ? rawData : [rawData];
 
+          const groups = results.filter(result => result.Type === 'Group');
+
+          // Перебор результатов для проверки необходимости кэширования
+          groups.forEach(checkAndCacheGroup);
+
           setSearchResults(results);
+
+          // Если нет групп, запрашиваем подсказки из второго API
+          if (groups.length === 0) {
+            return fetch(`http://77.91.68.83:8080/autocomplete?title=${encodeURIComponent(query)}`);
+          }
+        })
+        .then(response => {
+          // Обрабатываем ответ от второго API
+          if (response && response.ok) {
+            return response.json();
+          }
+        })
+        .then(suggestions => {
+          // Если есть подсказки от второго API, обновляем результаты поиска
+          if (suggestions && suggestions.length > 0) {
+            setSearchResults(suggestions);
+          }
         })
         .catch(error => {
           console.error('There was a problem with the fetch operation:', error);
         });
-  }, 300); // задержка в 300 миллисекунд
+  }, 300);
+
+
+  function checkAndCacheGroup(group: { Title: string; id: number; }) {
+    // Замените URL на адрес вашего сервера для проверки кэша
+    fetch(`http://77.91.68.83:8080/check-cache?title=${encodeURIComponent(group.Title)}`)
+        .then(response => response.json())
+        .then(data => {
+          // Проверяем, есть ли в кэше информация о группе
+          if (!data.cached) {
+            // Если группа не найдена в кэше, нужно её туда добавить
+            return fetch('http://77.91.68.83:8080/cache-group', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ title: group.Title, id: group.id }),
+            });
+          }
+        })
+        .then(response => {
+          if (response && !response.ok) {
+            // Если POST запрос не прошел успешно, выбрасываем ошибку
+            throw new Error('Problem with caching the group');
+          }
+          // Обработка успешного кэширования, если нужно
+        })
+        .catch(error => {
+          console.error('There was an error checking or updating the cache:', error);
+        });
+  }
 
   useEffect(() => {
     if (searchQuery.trim() !== '') {
