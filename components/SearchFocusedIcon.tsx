@@ -122,7 +122,7 @@ const SearchFocusedIcon = ({
 
           // Если нет групп, запрашиваем подсказки из второго API
           if (groups.length === 0) {
-            return fetch(`http://77.91.68.83:8080/autocomplete?title=${encodeURIComponent(query)}`);
+            return fetch(`http://geliusihe.ru:8082/autocomplete?title=${encodeURIComponent(query)}`);
           }
         })
         .then(response => {
@@ -145,13 +145,13 @@ const SearchFocusedIcon = ({
 
   function checkAndCacheGroup(group: { Title: string; id: number; }) {
     // Замените URL на адрес вашего сервера для проверки кэша
-    fetch(`http://77.91.68.83:8080/check-cache?title=${encodeURIComponent(group.Title)}`)
+    fetch(`http://geliusihe.ru:8082/check-cache?title=${encodeURIComponent(group.Title)}`)
         .then(response => response.json())
         .then(data => {
           // Проверяем, есть ли в кэше информация о группе
           if (!data.cached) {
             // Если группа не найдена в кэше, нужно её туда добавить
-            return fetch('http://77.91.68.83:8080/cache-group', {
+            return fetch('http://geliusihe.ru:8082/cache-group', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',

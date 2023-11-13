@@ -1,15 +1,17 @@
 import * as React from "react";
-import {useEffect, useState} from "react";
-import {ActivityIndicator, Button, ScrollView, StyleSheet, Text, TouchableOpacity, View} from "react-native";
+import {useEffect, useRef, useState} from "react";
+import {ActivityIndicator, Button, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View} from "react-native";
 import TableSubheadings from "../components/TableSubheadings";
 import LessonCard from "../components/LessonCard";
 import HeaderTitleIcon from "../components/HeaderTitleIcon";
 import TabBar from "../components/TabBar";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {Color, FontFamily, FontSize} from "../GlobalStyles";
+import {Color, FontFamily, FontSize, Padding} from "../GlobalStyles";
 import {useGroupId} from "../components/GroupIdContext";
 import {useGroup} from "../components/GroupContext";
 import {find} from "lodash";
+import Modal from "react-native-modal";
+import {Image} from "expo-image";
 
 type ScheduleItem = {
   date: string;
@@ -77,7 +79,12 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
   const [data, setData] = useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const groupedScheduleData = groupByDate(scheduleData);
-
+  const [modalVisible, setModalVisible] = useState(false);
+  const [subjectName, setSubjectName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [stableSchedule, setStableSchedule] = useState<ScheduleItem[]>([]);
+  const [error, setError] = useState(null);
+  const inputRef = useRef<TextInput>(null); // указываем TextInput как тип ссылки
   function formatHumanReadableDate(dateString: string): string {
     const date = parseDate(dateString);
 
@@ -131,9 +138,6 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     return schedule.filter(lesson => subjectDates.includes(lesson.date));
   }
 
-
-
-
   function filterPhysicalEducationLessons(scheduleData: any[]) {
     let isPhysicalEducationFound = false;
 
@@ -148,6 +152,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     });
   }
 
+
   async function loadMoreData() {
     setIsFetchingMore(true);
 
@@ -159,7 +164,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       const value = await AsyncStorage.getItem('@group_name');
       const actualGroupName = groupName || value || null;
       const startDateForNextFetch = addDays(endDate, 2);
-      const newEndDate = addDays(startDateForNextFetch, 6);
+      const newEndDate = addDays(startDateForNextFetch, 13);
       setEndDate(newEndDate);
       const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${formatDate(startDateForNextFetch)}&dfinish=${formatDate(newEndDate)}`;
 
@@ -177,9 +182,9 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       if (newData[resultKey] && newData[resultKey].RaspItem) {
         const flatNewData = [].concat(...newData[resultKey].RaspItem);
         const filteredScheduleData = filterPhysicalEducationLessons(flatNewData);
-        setScheduleData(prevData => [...prevData, ...filteredScheduleData]);
+        setScheduleData(prevData => [...prevData, ...filterScheduleBySubject(subjectName, filteredScheduleData)]);
       } else {
-        console.error("Unexpected data structure");
+        console.error(`Unexpected data structure`);
       }
       setTimeout(() => {
         if (scrollViewRef.current && scrollViewRef.current.scrollTo) {
@@ -194,6 +199,18 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       setIsFetchingMore(false);
     }
   }
+
+  useEffect(() => {
+    if (modalVisible) {
+      const timer = setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [modalVisible]);
 
   const formatDate = (date: Date): string => {
     const day = String(date.getDate()).padStart(2, '0');
@@ -259,12 +276,14 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
         }
 
         let data = await response.json();
+        const resultKey = isGroup(actualGroupName) ? 'GetRaspGroupResult' : 'GetRaspPrepResult';
+        console.log(data[resultKey].RaspItem)
+
 
         // Очистка тайм-аута, так как данные были успешно получены
         clearTimeout(timeoutId);
 
         // Убедитесь, что ключ resultKey существует в ответе от сервера
-        const resultKey = isGroup(actualGroupName) ? 'GetRaspGroupResult' : 'GetRaspPrepResult';
 
         if(data[resultKey] && data[resultKey].RaspItem) {
           const filteredScheduleData = filterPhysicalEducationLessons(data[resultKey].RaspItem);
@@ -291,7 +310,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     fetchData(); // затем обновляем данные с сервера
 
 
-  }, [actualGroupId, groupNameContext]); // добавление groupId в зависимости useEffect
+  }, [actualGroupId, groupNameContext]);
 
 
   if (isLoading) {
@@ -319,6 +338,16 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       return undefined;
     }
   }
+  const handleButtonPress = () => {
+    // Проверяем, пустой ли stableSchedule
+    if (stableSchedule.length === 0) {
+      setStableSchedule(scheduleData);
+    }
+
+    // Используем stableSchedule вместо scheduleData
+    setScheduleData(filterScheduleBySubject(subjectName, stableSchedule));
+    setModalVisible(false)
+  };
 
 
   function isGroup(groupName: any) {
@@ -344,15 +373,38 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       lessonInfo
     };
   }
+
   return (
       <View style={styles.schedule}>
-        <HeaderTitleIcon
-            prop={data || "loading"}
-            headerTitleIconPosition="absolute"
-            headerTitleIconMarginLeft={-187.5}
-            headerTitleIconTop={15}
-            headerTitleIconLeft="50%"
-        />
+        <View style={[styles.headertitleicon, styles.headerTitleIconStyle]}>
+          <View style={[styles.leftAccessory, styles.accessoryFlexBox]}>
+            <Image
+                style={styles.backIcon}
+                contentFit="cover"
+                source={require("../assets/back-icon.png")}
+            />
+            <Text style={[styles.leftTitle, styles.textTypo]}>Расписание</Text>
+          </View>
+          <View style={[styles.title, styles.accessoryFlexBox]}>
+            {data === "loading" ? (
+                <ActivityIndicator size="small" color="#0000ff" />
+            ) : (
+                <Text style={[styles.text, styles.textTypo]}>{data}</Text>
+            )}
+
+          </View>
+          <View style={[styles.rightAccessory, styles.accessoryFlexBox]}>
+            <View style={[styles.iconsleft, styles.accessoryFlexBox]}>
+              <TouchableOpacity onPress={() => setModalVisible(true)}>
+                <Image
+                    style={styles.badgecalendarIcon}
+                    contentFit="cover"
+                    source={require("../assets/badgecalendar.png")}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
         <ScrollView
             ref={scrollViewRef}
             style={{
@@ -368,9 +420,9 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
           </>
           {!groupName ? null : (
               <View style={{ height: 100, backgroundColor: 'white', paddingLeft: 20, paddingTop: 20 }}>
-                <Text style={[{ color: '#007AFF', fontWeight: '800' }, styles.textTypo]}>{isGroup(groupName) ? 'Группа' : 'Преподаватель'}</Text>
-                <Text style={[{ marginTop: 5, fontWeight: 'bold' }, styles.textTypo]}>{groupName}</Text>
-                <Text style={[{ marginTop: 5, color: '#8E8E93' }, styles.textTypo]}>{isGroup(groupName) ? 'Информация о группе' : 'Информация о преподавателе'}</Text>
+                <Text style={[{ marginTop: -10, color: '#007AFF', fontWeight: '800' }, styles.textTypoSearch]}>{isGroup(groupName) ? 'Группа' : 'Преподаватель'}</Text>
+                <Text style={[{ marginTop: 5, fontWeight: 'bold' }, styles.textTypoSearch]}>{groupName}</Text>
+                <Text style={[{ marginTop: 5, color: '#8E8E93' }, styles.textTypoSearch]}>{isGroup(groupName) ? 'Информация о группе' : 'Информация о преподавателе'}</Text>
               </View>
           )}
           {Object.entries(groupedScheduleData).length > 0 ? (
@@ -396,6 +448,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                               }
                               showBg={false}
                               showBg1={false}
+                              subjectName={subjectName}
                           />
                       );
                     })}
@@ -439,11 +492,225 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
             tabBarWidth={400}
             tabBarHeight={75}
         />
+        <Modal
+            isVisible={modalVisible}
+            onSwipeComplete={() => setModalVisible(false)}
+            swipeDirection={['down']}
+            style={styles.modal}
+            onBackdropPress={() => setModalVisible(false)} // закрыть модальное окно при нажатии вне его
+        >
+          <View style={styles.headerBar}></View>
+          <View style={styles.modalContent}>
+            <Text style={styles.headerText}>Установка фильтра</Text>
+            <Text style={styles.instructionText}>
+              Можете установить фильтр по отображаемым предметам, выбрать диапазон показа расписания
+            </Text>
+            {error && <Text style={{color: 'red'}}>{error}</Text>}
+            <TextInput
+                ref={inputRef}
+                placeholder="Название предмета"
+                style={styles.input}
+                onChangeText={text => setSubjectName(text)}
+                value={subjectName}
+            />
+
+            <TouchableOpacity
+                style={styles.closeButton}
+                disabled={loading}
+                onPress={handleButtonPress} // Добавляем обработчик события здесь
+            >
+              {loading ? (
+                  <ActivityIndicator size="small" color="#0000ff" />
+              ) : (
+                  <Text style={styles.textStyle}>Установить</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </Modal>
       </View>
   );
 };
 
 const styles = StyleSheet.create({
+  headerTitleIconStyle: {
+    position: "absolute",
+    marginLeft: -187.5,
+    top: 15,
+    left: '50%',
+  },
+  centeredView: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalView: {
+    margin: 20,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 35,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  container: {
+    marginTop: 30,
+    flex: 1,
+  },
+  accessoryFlexBox: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  textTypo: {
+    fontFamily: FontFamily.tabBarMedium,
+    lineHeight: 24,
+    letterSpacing: 0,
+    fontSize: 18,
+  },
+  textTypoSearch: {
+    fontFamily: FontFamily.tabBarMedium,
+    lineHeight: 24,
+    letterSpacing: 0,
+    fontSize: 14,
+  },
+  backIcon: {
+    width: 18,
+    height: 24,
+  },
+  leftTitle: {
+    flex: 1,
+    color: Color.lightGraphicsBlue,
+    textAlign: "left",
+    display: "flex",
+    height: 23,
+    marginLeft: 5,
+    overflow: "hidden",
+    alignItems: "center",
+  },
+  leftAccessory: {
+    left: 0,
+    width: 136,
+    paddingLeft: Padding.p_6xs,
+    paddingTop: Padding.p_4xs,
+    paddingRight: Padding.p_4xs,
+    paddingBottom: Padding.p_4xs,
+    display: "none",
+    alignItems: "center",
+    top: "50%",
+    marginTop: -21,
+    position: "absolute",
+    flexDirection: "row",
+    height: 42,
+  },
+  text: {
+    fontWeight: "600",
+    color: Color.lightLabelPrimary,
+    textAlign: "center",
+  },
+  title: {
+    marginLeft: -66.5,
+    left: "50%",
+    width: 133,
+    justifyContent: "center",
+    alignItems: "center",
+    top: "50%",
+    marginTop: -21,
+    position: "absolute",
+    flexDirection: "row",
+    height: 42,
+  },
+  badgecalendarIcon: {
+    width: 26,
+    height: 26,
+    overflow: "hidden",
+  },
+  iconsleft: {
+    alignItems: "center",
+  },
+  rightAccessory: {
+    right: 0,
+    justifyContent: "flex-end",
+    paddingLeft: Padding.p_5xs,
+    paddingTop: Padding.p_5xs,
+    paddingRight: Padding.p_base,
+    paddingBottom: Padding.p_5xs,
+    alignItems: "center",
+    top: "50%",
+    marginTop: -21,
+    position: "absolute",
+    flexDirection: "row",
+    height: 42,
+  },
+  headertitleicon: {
+    backgroundColor: Color.lightBackgroundQuaternary,
+    borderStyle: "solid",
+    borderColor: Color.colorDarkslategray_100,
+    borderBottomWidth: 0.5,
+    width: 375,
+    height: 42,
+  },
+  input: {
+    paddingLeft: 15,
+    borderWidth: 0.3, // Толщина черной полоски
+    borderRadius: 20,
+    height: 55,
+    borderColor: 'gray',
+    width: '100%',
+    marginTop: 10,
+  },
+  modal: {
+    justifyContent: 'flex-end',
+    margin: 0,
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    padding: 22,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  headerBar: {
+    backgroundColor: '#F8F8F8',
+    height: 60,
+    borderTopRightRadius: 15,
+    borderTopLeftRadius: 15,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderBottomWidth: 0.02, // Толщина черной полоски
+    borderBottomColor: 'black',
+  },
+  headerText: {
+    fontSize: 25,
+    fontWeight: "bold",
+    textAlign: 'center',
+  },
+  instructionText: {
+    color: "gray",
+    fontSize: 16,
+    marginTop: 15,
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  closeButton: {
+    backgroundColor: '#2196F3',
+    borderRadius: 20,
+    height: 50,
+    width: '70%',
+    padding: 10,
+    marginTop: 40,
+    justifyContent: 'center',
+    alignSelf: 'center', // выравнивание по центру горизонтали
+  },
+  textStyle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: 'white',
+    textAlign: 'center',
+  },
   button: {
     backgroundColor: '#2296f3',
     padding: 10,
@@ -466,13 +733,6 @@ const styles = StyleSheet.create({
   noDataText: {
     fontSize: 18,
     textAlign: 'center',
-  },
-  textTypo: {
-    textAlign: "left",
-    fontFamily: FontFamily.tabBarMedium,
-    lineHeight: 18,
-    letterSpacing: 0,
-    fontSize: FontSize.footnoteRegular_size,
   },
   centered: {
     flex: 1,

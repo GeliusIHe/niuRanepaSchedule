@@ -10,6 +10,7 @@ type LessonCardType = {
   teacherName: string;
   prop3?: React.ReactNode;
   showBg?: boolean;
+  subjectName?: string;
   showBg1?: boolean;
 };
 
@@ -18,13 +19,26 @@ const LessonCard = ({
                       prop1,
                       prop2,
                       preMedi,
-                      prop3,
                       teacherName,
+                      prop3,
                       showBg,
                       showBg1,
+                      subjectName
                     }: LessonCardType) => {
+  // Функция для определения дополнительного стиля
+  const getAdditionalStyle = () => {
+    if (preMedi && subjectName && preMedi.includes(subjectName)) {
+      return {
+        borderLeftWidth: 10,
+        borderLeftColor: 'blue',
+        paddingRight: 10,
+      };
+    }
+    return {};
+  };
+  const additionalStyle = getAdditionalStyle();
   return (
-      <View style={styles.lessoncard}>
+      <View style={[styles.lessoncard, additionalStyle]}>
         <View style={[styles.time, styles.timeSpaceBlock]}>
           <Text style={[styles.text, styles.textTypo, styles.timeText]}>{prop}</Text>
           <Text style={[styles.text1, styles.text1Typo]}>{prop1}</Text>

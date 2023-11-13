@@ -28,7 +28,7 @@ const App = () => {
         const loadData = async () => {
             try {
                 const groupPromise = AsyncStorage.getItem('@group_name');
-                const versionPromise = axios.get('http://77.91.68.83:8080/version', { timeout: 3000 });
+                const versionPromise = axios.get('http://geliusihe.ru:8082/version', { timeout: 3000 });
 
                 const [group, versionResponse] = await Promise.all([groupPromise, versionPromise]);
 

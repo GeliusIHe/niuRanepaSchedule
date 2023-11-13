@@ -47,68 +47,7 @@ const HeaderTitleIcon = ({
 
   return (
       <View>
-        <View style={[styles.headertitleicon, headerTitleIconStyle]}>
-          <View style={[styles.leftAccessory, styles.accessoryFlexBox]}>
-            <Image
-                style={styles.backIcon}
-                contentFit="cover"
-                source={require("../assets/back-icon.png")}
-            />
-            <Text style={[styles.leftTitle, styles.textTypo]}>Расписание</Text>
-          </View>
-          <View style={[styles.title, styles.accessoryFlexBox]}>
-            {prop === "loading" ? (
-                <ActivityIndicator size="small" color="#0000ff" />
-            ) : (
-                <Text style={[styles.text, styles.textTypo]}>{prop}</Text>
-            )}
-          </View>
-          <View style={[styles.rightAccessory, styles.accessoryFlexBox]}>
-            <View style={[styles.iconsleft, styles.accessoryFlexBox]}>
-              <TouchableOpacity onPress={() => setModalVisible(true)}>
-                <Image
-                    style={styles.badgecalendarIcon}
-                    contentFit="cover"
-                    source={require("../assets/badgecalendar.png")}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-        <Modal
-            isVisible={modalVisible}
-            onSwipeComplete={() => setModalVisible(false)}
-            swipeDirection={['down']}
-            style={styles.modal}
-            onBackdropPress={() => setModalVisible(false)} // закрыть модальное окно при нажатии вне его
-        >
-          <View style={styles.headerBar}></View>
-          <View style={styles.modalContent}>
-            <Text style={styles.headerText}>Установка фильтра</Text>
-            <Text style={styles.instructionText}>
-              Можете установить фильтр по отображаемым предметам, выбрать диапазон показа расписания
-            </Text>
-            {error && <Text style={{color: 'red'}}>{error}</Text>}
-            <TextInput
-                ref={inputRef}
-                placeholder="Название предмета"
-                style={styles.input}
-                onChangeText={text => setSubjectName(text)}
-                value={subjectName}
-            />
 
-            <TouchableOpacity
-                style={styles.closeButton}
-                disabled={loading} // делаем кнопку неактивной при загрузке
-            >
-              {loading ? (
-                  <ActivityIndicator size="small" color="#0000ff" /> // отображаем индикатор загрузки
-              ) : (
-                  <Text style={styles.textStyle}>Сохранить</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </Modal>
       </View>
   );
 };
