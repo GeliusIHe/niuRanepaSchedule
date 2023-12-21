@@ -1,12 +1,13 @@
 import React, {useEffect, useMemo, useState} from "react";
 import { Image } from "expo-image";
-import {StyleSheet, View, Text, TextInput, TouchableOpacity} from "react-native";
+import {StyleSheet, View, Text, TextInput, TouchableOpacity, Animated} from "react-native";
 import { FontFamily, Color, FontSize, Border, Padding } from "../GlobalStyles";
 import HeaderTitle from "./HeaderTitle";
 import { debounce } from 'lodash';
 import {useNavigation} from "@react-navigation/core";
 import Schedule from "../screens/Schedule";
 import {useGroupId} from "./GroupIdContext";
+import FlatList = Animated.FlatList;
 
 type SearchFocusedIconType = {
   showCursor1?: boolean;
@@ -101,40 +102,36 @@ const SearchFocusedIcon = ({
   }
 
   const debouncedSearch = debounce((query: string) => {
-    fetch(`http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?name=${query}`)
+    // Сначала обращаемся к api.geliusihe
+    fetch(`https://api.geliusihe.ru/autocomplete?title=${encodeURIComponent(query)}`)
         .then(response => {
           if (!response.ok) {
             throw new Error('Network response was not ok ' + response.statusText);
           }
           return response.json();
         })
-        .then(data => {
-          const rawData = data.GetNameUidForRaspResult?.ItemRaspUID || [];
-
-          const results = Array.isArray(rawData) ? rawData : [rawData];
-
-          const groups = results.filter(result => result.Type === 'Group');
-
-          // Перебор результатов для проверки необходимости кэширования
-          groups.forEach(checkAndCacheGroup);
-
-          setSearchResults(results);
-
-          // Если нет групп, запрашиваем подсказки из второго API
-          if (groups.length === 0) {
-            return fetch(`http://geliusihe.ru:8082/autocomplete?title=${encodeURIComponent(query)}`);
+        .then(suggestions => {
+          if (suggestions && suggestions.length > 0) {
+            // Если есть результаты от api.geliusihe, используем их и не выполняем запрос к services.niu.ranepa.ru
+            setSearchResults(suggestions);
+          } else {
+            // Если нет результатов от api.geliusihe, выполняем запрос к services.niu.ranepa.ru
+            return fetch(`http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?name=${query}`);
           }
         })
         .then(response => {
-          // Обрабатываем ответ от второго API
           if (response && response.ok) {
             return response.json();
           }
         })
-        .then(suggestions => {
-          // Если есть подсказки от второго API, обновляем результаты поиска
-          if (suggestions && suggestions.length > 0) {
-            setSearchResults(suggestions);
+        .then(data => {
+          // Добавляем проверку на наличие данных перед обращением к свойствам объекта
+          if (data) {
+            const rawData = data.GetNameUidForRaspResult?.ItemRaspUID || [];
+            const results = Array.isArray(rawData) ? rawData : [rawData];
+            const groups = results.filter(result => result.Type === 'Group');
+            groups.forEach(checkAndCacheGroup);
+            setSearchResults(results);
           }
         })
         .catch(error => {
@@ -142,16 +139,15 @@ const SearchFocusedIcon = ({
         });
   }, 300);
 
-
   function checkAndCacheGroup(group: { Title: string; id: number; }) {
     // Замените URL на адрес вашего сервера для проверки кэша
-    fetch(`http://geliusihe.ru:8082/check-cache?title=${encodeURIComponent(group.Title)}`)
+    fetch(`https://api.geliusihe.ru/check-cache?title=${encodeURIComponent(group.Title)}`)
         .then(response => response.json())
         .then(data => {
           // Проверяем, есть ли в кэше информация о группе
           if (!data.cached) {
             // Если группа не найдена в кэше, нужно её туда добавить
-            return fetch('http://geliusihe.ru:8082/cache-group', {
+            return fetch('https://api.geliusihe.ru/cache-group', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -249,31 +245,40 @@ const SearchFocusedIcon = ({
                     }}
                     value={searchQuery}
                 />
-                <Image style={styles.sfSymbolXmarkcirclefill} source={require("../assets/sf-symbol--xmarkcirclefill.png")} />
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Image
+                      style={styles.sfSymbolXmarkcirclefill}
+                      source={require("../assets/sf-symbol--xmarkcirclefill.png")}
+                  />
+                </TouchableOpacity>
               </View>
 
               <View style={styles.inputLine}></View>
 
               <View style={styles.resultContainer}>
-                {searchResults.map(item => (
-                    <TouchableOpacity onPress={() => handleGroupClick(item.id, item.Title)}>
-                      <View style={[styles.groupContainer, { flexDirection: 'row', alignItems: 'center' }]}>
-                        {item.Type === "Prep" && (
-                            <View style={styles.iconContainer}>
-                              <Image source={require("../assets/Graduationcap.svg")} style={styles.icon} />
+                <FlatList style={[{marginBottom: 195}]}
+                    data={searchResults}
+                    renderItem={({ item }) => (
+                        <TouchableOpacity onPress={() => handleGroupClick(item.id, item.Title)}>
+                          <View style={[styles.groupContainer, { flexDirection: 'row', alignItems: 'center' }]}>
+                            {item.Type === "Prep" && (
+                                <View style={styles.iconContainer}>
+                                  <Image source={require("../assets/Graduationcap.svg")} style={styles.icon} />
+                                </View>
+                            )}
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.resultText, styles.boldText]}>
+                                {item.Title}
+                              </Text>
+                              <Text style={styles.additionalText}>
+                                {item.Type === "Group" ? `СПО, ${extractCourseNumber(item.Title)} курс, очная форма` : "Информация о преподавателе"}
+                              </Text>
                             </View>
-                        )}
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.resultText, styles.boldText]}>
-                            {item.Title}
-                          </Text>
-                          <Text style={styles.additionalText}>
-                            {item.Type === "Group" ? `СПО, ${extractCourseNumber(item.Title)} курс, очная форма` : "Информация о преподавателе"}
-                          </Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                ))}
+                          </View>
+                        </TouchableOpacity>
+                    )}
+                    keyExtractor={item => item.id.toString()}
+                />
               </View>
 
               {searchQuery === '' ? (
@@ -302,7 +307,6 @@ const styles = StyleSheet.create({
   icon: {
     width: 20,
     height: 20,
-    resizeMode: 'contain',
   },
   container2: {
     flexDirection: 'row',

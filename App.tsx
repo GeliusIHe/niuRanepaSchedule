@@ -21,74 +21,48 @@ const App = () => {
     "SFProText-Regular": require("./assets/fonts/SFProText-Regular.otf"),
   });
 
-  const [initialScreen, setInitialScreen] = useState('StartScreen');
-  const [versionError, setVersionError] = useState(false); // Состояние для ошибки версии
-  const [isLoading, setIsLoading] = useState(true);
+    const [versionErrorState, setVersionErrorState] = useState("");
     useEffect(() => {
         const loadData = async () => {
             try {
-                const groupPromise = AsyncStorage.getItem('@group_name');
-                const versionPromise = axios.get('http://geliusihe.ru:8082/version', { timeout: 3000 });
 
-                const [group, versionResponse] = await Promise.all([groupPromise, versionPromise]);
+                // Отправка версии приложения на сервер
+                const appVersion = 'previewBuild-1.0.1-sdj1m23hcu';
+                const response = await axios.get(`https://api.geliusihe.ru/getData/${appVersion}`, { timeout: 3000 });
 
-                if (group !== null) {
-                    console.log(group);
-                    setInitialScreen('Schedule');
+                // Проверка access и установка состояния ошибки версии
+                if (response.data.access === 0) {
+                    setVersionErrorState(`${response.data.comment}`);
                 }
-
-                const serverVersion = versionResponse.data.version;
-                const appVersion = 'previewBuild-1.0.0-sdj1m23hcu';
-                setVersionError(serverVersion !== appVersion);
-
+                await AsyncStorage.setItem('failedAttempts', '0');
             } catch (error) {
                 console.error('Error loading data:', error);
-                setVersionError(true);
-            } finally {
-                setIsLoading(false);
+
+                // Чтение счётчика неудачных попыток
+                const failedAttempts = await AsyncStorage.getItem('failedAttempts') || '0';
+                const attempts = parseInt(failedAttempts, 10);
+
+                if (attempts < 4) {
+                    // Увеличение счётчика при неудачной попытке
+                    await AsyncStorage.setItem('failedAttempts', (attempts + 1).toString());
+                } else {
+                    // Установка ошибки если число попыток достигло 3
+                    setVersionErrorState("Не удалось проверить подлинность приложения множество раз.");
+                }
             }
         };
-
         loadData();
     }, []);
-
-
-    const [showLoader, setShowLoader] = useState(false);
-
-    useEffect(() => {
-        if (isLoading) {
-            const loaderTimeout = setTimeout(() => {
-                setShowLoader(true);
-            }, 65);
-
-            return () => clearTimeout(loaderTimeout); // Очищаем таймер, если компонент размонтирован
-        }
-
-        setShowLoader(false); // Скрываем загрузчик, если загрузка завершена
-    }, [isLoading]);
-
-    if (showLoader) {
-        return (
-            <View style={styles.centered}>
-                <ActivityIndicator size="large" color="#0000ff" />
-            </View>
-        );
-    }
 
   if (!fontsLoaded && !error) {
     return null;
   }
 
-    if (versionError) {
+    if (versionErrorState != "") {
         return (
             <View style={styles.container}>
                 <View style={styles.textBox}>
-                    <Text style={styles.text}>
-                        Временно установлен промежуточный DRM сервер. Если вы видите это сообщение,
-                        включите интернет, и повторите попытку снова. Если не помогло - значит вам
-                        нужно обновить приложение, в противном случае - автор ограничил распространение
-                        этой версии. Билд можно получить у @Temfzx
-                    </Text>
+                    <Text style={styles.text}>{versionErrorState}</Text>
                 </View>
             </View>
         );
@@ -99,7 +73,7 @@ const App = () => {
           <GroupIdProvider>
               <NavigationContainer>
                   <StatusBar hidden={true} />
-                  <Stack.Navigator initialRouteName={initialScreen} screenOptions={{ headerShown: false }}>
+                  <Stack.Navigator initialRouteName={'Schedule'} screenOptions={{ headerShown: false }}>
                       <Stack.Screen name="StartScreen" component={StartScreen} />
                       <Stack.Screen name="Schedule" component={Schedule} />
                       <Stack.Screen name="SearchTyping" component={SearchTyping} />

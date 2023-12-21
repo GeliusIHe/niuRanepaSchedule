@@ -44,7 +44,7 @@ const LessonCard = ({
           <Text style={[styles.text1, styles.text1Typo]}>{prop1}</Text>
         </View>
         <View style={[styles.description, styles.timeSpaceBlock]}>
-          <Text style={styles.text2}>
+          <Text style={[styles.text2, {width: '85%'}]}>
             {prop2}
             {teacherName && (
                 <Text style={[styles.text3, styles.text3SpaceBlock]}> ({teacherName})</Text>

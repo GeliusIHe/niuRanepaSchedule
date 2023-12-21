@@ -1,6 +1,16 @@
 import * as React from "react";
 import {useEffect, useRef, useState} from "react";
-import {ActivityIndicator, Button, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View} from "react-native";
+import {
+  ActivityIndicator,
+  Button,
+  Linking,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from "react-native";
 import TableSubheadings from "../components/TableSubheadings";
 import LessonCard from "../components/LessonCard";
 import HeaderTitleIcon from "../components/HeaderTitleIcon";
@@ -12,6 +22,8 @@ import {useGroup} from "../components/GroupContext";
 import {find} from "lodash";
 import Modal from "react-native-modal";
 import {Image} from "expo-image";
+import axios from "axios";
+import {useNavigation} from "@react-navigation/core";
 
 type ScheduleItem = {
   date: string;
@@ -82,9 +94,15 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [subjectName, setSubjectName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [suggestion, setSuggestion] = useState<string>('');
   const [stableSchedule, setStableSchedule] = useState<ScheduleItem[]>([]);
   const [error, setError] = useState(null);
   const inputRef = useRef<TextInput>(null); // указываем TextInput как тип ссылки
+  const [showUpdate, setShowUpdate] = useState(false);
+  const [subjectNames, setSubjectNames] = useState<string[]>([]);
+  const [updateUrl, setUpdateUrl] = useState('');
+  const navigation = useNavigation();
+
   function formatHumanReadableDate(dateString: string): string {
     const date = parseDate(dateString);
 
@@ -200,6 +218,53 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     }
   }
 
+  const findSuggestion = (input: any) => {
+    const matchedSubject = subjectNames.find(name => name.toLowerCase().startsWith(input.toLowerCase()));
+    return matchedSubject || '';
+  };
+
+  useEffect(() => {
+    if (subjectName) {
+      setSuggestion(findSuggestion(subjectName));
+    }
+  }, [subjectName, subjectNames]);
+
+  useEffect(() => {
+    console.log(`Stable schedule changing. : ${stableSchedule}`)
+    const uniqueNames = [...new Set(stableSchedule.map(item => {
+      return item.name.split('(')[0].trim();
+    }))];
+    setSubjectNames(uniqueNames);
+  }, [stableSchedule]); // Обновляем subjectNames при изменении stableSchedule
+
+  useEffect(() => {
+    if (stableSchedule.length > 0) {
+      setScheduleData(filterScheduleBySubject(subjectName, stableSchedule));
+      console.log(subjectName, stableSchedule);
+      setModalVisible(false);
+    }
+  }, [stableSchedule]); // Этот useEffect будет вызван, когда stableSchedule обновится
+
+  useEffect(() => {
+    const checkForUpdates = async () => {
+      const appVersion = 'previewBuild-1.0.1-sdj1m23hcu'; // Пример текущей версии приложения
+      try {
+        const response = await axios.get(`https://api.geliusihe.ru/getData/${appVersion}`);
+        if (response.data.latest === 0) {
+          const latestResponse = await axios.get('https://api.geliusihe.ru/latest');
+          console.log(latestResponse.data); // Вывод ответа от /latest
+          setUpdateUrl(latestResponse.data)
+          setShowUpdate(true);
+        }
+      } catch (error) {
+        console.error('Ошибка при запросе к серверу:', error);
+      }
+    };
+
+    checkForUpdates();
+  }, []);
+
+
   useEffect(() => {
     if (modalVisible) {
       const timer = setTimeout(() => {
@@ -254,6 +319,10 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       const getData = async () => {
         try {
           const value = await AsyncStorage.getItem('@group_name');
+          if (value == null) {
+            // @ts-ignore
+            navigation.navigate('StartScreen');
+          }
           return value || null;
         } catch (e) {
           console.error('Error reading data', e);
@@ -277,8 +346,6 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
 
         let data = await response.json();
         const resultKey = isGroup(actualGroupName) ? 'GetRaspGroupResult' : 'GetRaspPrepResult';
-        console.log(data[resultKey].RaspItem)
-
 
         // Очистка тайм-аута, так как данные были успешно получены
         clearTimeout(timeoutId);
@@ -339,13 +406,16 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     }
   }
   const handleButtonPress = () => {
-    // Проверяем, пустой ли stableSchedule
+    setEndDate(addDays(new Date(), 7));
     if (stableSchedule.length === 0) {
+      console.log(`Default schedule : ${scheduleData}`)
       setStableSchedule(scheduleData);
+      console.log(`Set stable schedule: ${stableSchedule}`)
     }
 
     // Используем stableSchedule вместо scheduleData
     setScheduleData(filterScheduleBySubject(subjectName, stableSchedule));
+    console.log(subjectName, stableSchedule)
     setModalVisible(false)
   };
 
@@ -373,6 +443,12 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       lessonInfo
     };
   }
+  const handleUpdatePress = () => {
+    console.log(updateUrl)
+    if (updateUrl) {
+      Linking.openURL(updateUrl).catch(err => console.error('Ошибка при открытии URL:', err));
+    }
+  };
 
   return (
       <View style={styles.schedule}>
@@ -412,6 +488,13 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
               marginBottom: 75
             }}        >
           <>
+            {showUpdate && (
+                <TouchableOpacity onPress={handleUpdatePress}>
+                  <View style={{backgroundColor: '#6FBA8F', padding: 5, alignItems: 'center', height: 30}}>
+                    <Text style={{color: '#F8FCFA'}}>Доступно обновление. Нажмите чтобы установить</Text>
+                  </View>
+                </TouchableOpacity>
+            )}
             {showNotification && (
                 <View style={{ backgroundColor: 'red', padding: 5, alignItems: 'center' }}>
                   <Text style={{ color: 'white' }}>Не удалось извлечь новые данные с сервера</Text>
@@ -507,17 +590,18 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
             </Text>
             {error && <Text style={{color: 'red'}}>{error}</Text>}
             <TextInput
-                ref={inputRef}
-                placeholder="Название предмета"
                 style={styles.input}
-                onChangeText={text => setSubjectName(text)}
+                onChangeText={(text) => {
+                  setSubjectName(text);
+                }}
                 value={subjectName}
+                placeholder={subjectName.length === 0 ? 'Название предмета' : ''}
             />
 
             <TouchableOpacity
                 style={styles.closeButton}
                 disabled={loading}
-                onPress={handleButtonPress} // Добавляем обработчик события здесь
+                onPress={handleButtonPress}
             >
               {loading ? (
                   <ActivityIndicator size="small" color="#0000ff" />
