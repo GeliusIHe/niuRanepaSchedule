@@ -102,6 +102,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
   const [subjectNames, setSubjectNames] = useState<string[]>([]);
   const [updateUrl, setUpdateUrl] = useState('');
   const navigation = useNavigation();
+  const [searchQuery, setSearchQuery] = useState(''); // для хранения запроса пользователя
 
   function formatHumanReadableDate(dateString: string): string {
     const date = parseDate(dateString);
@@ -247,7 +248,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
 
   useEffect(() => {
     const checkForUpdates = async () => {
-      const appVersion = 'previewBuild-1.0.1-sdj1m23hcu'; // Пример текущей версии приложения
+      const appVersion = 'preRelease-1.0.0-122323';
       try {
         const response = await axios.get(`https://api.geliusihe.ru/getData/${appVersion}`);
         if (response.data.latest === 0) {
@@ -271,7 +272,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
         if (inputRef.current) {
           inputRef.current.focus();
         }
-      }, 100);
+      }, 150);
 
       return () => clearTimeout(timer);
     }
@@ -295,8 +296,8 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
         if (!groupName) {
           const cachedData = await AsyncStorage.getItem('scheduleData');
           if (cachedData) {
-            setScheduleData(JSON.parse(cachedData));
             setIsLoading(false);
+            setScheduleData(JSON.parse(cachedData));
           }
         }
       } catch (error) {
@@ -308,18 +309,17 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
   }, [actualGroupId]);
 // Кастомный хук для отслеживания изменений в AsyncStorage
   useEffect(() => {
-    async function fetchData() {
-      setIsLoading(true);
+    let intervalId: string | number | NodeJS.Timeout | undefined;
+    let isInitialLoad = true;
 
-      const timeoutId = setTimeout(() => {
-        setShowNotification(true);
-        console.log('notif')
-      }, 5000);
+    async function fetchData() {
 
       const getData = async () => {
         try {
           const value = await AsyncStorage.getItem('@group_name');
-          if (value == null) {
+          if (value == null && isInitialLoad) {
+            // Если @group_name null и это первая загрузка, перенаправляем на StartScreen
+            isInitialLoad = false; // Обновляем флаг, чтобы предотвратить повторное перенаправление
             // @ts-ignore
             navigation.navigate('StartScreen');
           }
@@ -331,52 +331,56 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       };
 
       const actualGroupName = groupName || await getData();
-      console.log(`Загружено расписание ${actualGroupName}`);
-      setData((actualGroupName || "").split(" ")[0] || null);
 
-      const startDate = formatDate(new Date());
-      const endDate = formatDate(addDays(new Date(), 7));
-      const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${startDate}&dfinish=${endDate}`;
+      if (actualGroupName !== null) {
+        console.log(`Загружено расписание ${actualGroupName}`);
+        setData((actualGroupName || "").split(" ")[0] || null);
 
-      try {
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
+        const startDate = formatDate(new Date());
+        const endDate = formatDate(addDays(new Date(), 7));
+        const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${startDate}&dfinish=${endDate}`;
 
-        let data = await response.json();
-        const resultKey = isGroup(actualGroupName) ? 'GetRaspGroupResult' : 'GetRaspPrepResult';
-
-        // Очистка тайм-аута, так как данные были успешно получены
-        clearTimeout(timeoutId);
-
-        // Убедитесь, что ключ resultKey существует в ответе от сервера
-
-        if(data[resultKey] && data[resultKey].RaspItem) {
-          const filteredScheduleData = filterPhysicalEducationLessons(data[resultKey].RaspItem);
-          setScheduleData(filterScheduleBySubject('', filteredScheduleData));
-          try {
-            await AsyncStorage.setItem('scheduleData', JSON.stringify(data[resultKey].RaspItem));
-          } catch (error) {
-            console.error('Error caching schedule data:', error);
+        try {
+          const response = await fetch(url);
+          if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
           }
 
-        } else {
-          console.error("Unexpected data structure");
+          let data = await response.json();
+          const resultKey = isGroup(actualGroupName) ? 'GetRaspGroupResult' : 'GetRaspPrepResult';
+
+          if (data[resultKey] && data[resultKey].RaspItem) {
+            const filteredScheduleData = filterPhysicalEducationLessons(data[resultKey].RaspItem);
+            setScheduleData(filterScheduleBySubject('', filteredScheduleData));
+            try {
+              await AsyncStorage.setItem('scheduleData', JSON.stringify(data[resultKey].RaspItem));
+            } catch (error) {
+              console.error('Error caching schedule data:', error);
+            }
+          } else {
+            console.error("Unexpected data structure");
+          }
+        } catch (error) {
+          console.error("An error occurred while fetching data:", error);
+          // Устанавливаем таймер на 5 секунд перед установкой showNotification в true
+          setTimeout(() => {
+            setShowNotification(true);
+          }, 5000);
+        } finally {
+          setIsLoading(false);
+          clearInterval(intervalId);
         }
-      } catch (error) {
-        console.error("An error occurred while fetching data:", error);
-        setShowNotification(true);
-        clearTimeout(timeoutId); // Очистка тайм-аута, так как произошла ошибка
-      } finally {
-        setIsLoading(false);
       }
     }
 
+    fetchData();
+    intervalId = setInterval(() => {
+      fetchData();
+    }, 2500);
 
-    fetchData(); // затем обновляем данные с сервера
-
-
+    return () => {
+      clearInterval(intervalId);
+    };
   }, [actualGroupId, groupNameContext]);
 
 
@@ -502,10 +506,10 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
             )}
           </>
           {!groupName ? null : (
-              <View style={{ height: 100, backgroundColor: 'white', paddingLeft: 20, paddingTop: 20 }}>
+              <View style={{ height: 95, backgroundColor: 'white', paddingLeft: 20, paddingTop: 20 }}>
                 <Text style={[{ marginTop: -10, color: '#007AFF', fontWeight: '800' }, styles.textTypoSearch]}>{isGroup(groupName) ? 'Группа' : 'Преподаватель'}</Text>
-                <Text style={[{ marginTop: 5, fontWeight: 'bold' }, styles.textTypoSearch]}>{groupName}</Text>
-                <Text style={[{ marginTop: 5, color: '#8E8E93' }, styles.textTypoSearch]}>{isGroup(groupName) ? 'Информация о группе' : 'Информация о преподавателе'}</Text>
+                <Text style={[{ marginTop: 0, fontWeight: 'bold' }, styles.textTypoSearch]}>{groupName}</Text>
+                <Text style={[{ marginTop: 0, color: '#8E8E93' }, styles.textTypoSearch]}>{isGroup(groupName) ? 'Информация о группе' : 'Информация о преподавателе'}</Text>
               </View>
           )}
           {Object.entries(groupedScheduleData).length > 0 ? (
@@ -551,18 +555,18 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                     setLoadMoreButtonPosition(layout.y);
                   }}
               >
-                <TouchableOpacity
+                {!showNotification && <TouchableOpacity
                     onPress={loadMoreData}
                     disabled={isFetchingMore}
                     style={styles.button}
                 >
                   <View style={styles.buttoncontainer}>
                     {isFetchingMore
-                        ? <ActivityIndicator color="white" />
+                        ? <ActivityIndicator color="white"/>
                         : <Text style={styles.buttontext}>ЗАГРУЗИТЬ ЕЩЕ</Text>
                     }
                   </View>
-                </TouchableOpacity>
+                </TouchableOpacity>}
               </View>
           )}
         </ScrollView>
@@ -589,14 +593,26 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
               Можете установить фильтр по отображаемым предметам, выбрать диапазон показа расписания
             </Text>
             {error && <Text style={{color: 'red'}}>{error}</Text>}
-            <TextInput
-                style={styles.input}
-                onChangeText={(text) => {
-                  setSubjectName(text);
-                }}
-                value={subjectName}
-                placeholder={subjectName.length === 0 ? 'Название предмета' : ''}
-            />
+
+            <View style={styles.inputContainer}>
+              <TextInput
+                  ref={inputRef}
+                  style={styles.input}
+                  onChangeText={(text) => {
+                    setSubjectName(text);
+                  }}
+                  value={subjectName}
+                  placeholder={subjectName.length === 0 ? 'Название предмета' : ''}
+              />
+
+              <TouchableOpacity onPress={() => setSubjectName('')}>
+                <Image
+                    style={styles.sfSymbolXmarkcirclefill}
+                    source={require("../assets/sf-symbol--xmarkcirclefill.png")}
+                />
+              </TouchableOpacity>
+            </View>
+
 
             <TouchableOpacity
                 style={styles.closeButton}
@@ -616,6 +632,17 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
 };
 
 const styles = StyleSheet.create({
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  sfSymbolXmarkcirclefill: {
+    width: 20,
+    height: 20,
+    marginLeft: -45,
+    marginTop: 10,
+  },
   headerTitleIconStyle: {
     position: "absolute",
     marginLeft: -187.5,

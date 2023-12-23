@@ -99,17 +99,6 @@ const TabBar = ({
                 </View>
             </TouchableOpacity>
 
-            <TouchableOpacity onPress={() => handleTabPress('Chat')}>
-                <View style={styles.iconContainer}>
-                    <Image
-                        style={styles.briefcaseIcon}
-                        contentFit="cover"
-                        source={require("../assets/bubble.png")}
-                    />
-                    <Text style={styles.text}>Чат</Text>
-                </View>
-            </TouchableOpacity>
-
             <TouchableOpacity onPress={() => handleTabPress('SearchTyping')}>
                 <View style={styles.iconContainer}>
                     {activeTab === 'SearchTyping' ?

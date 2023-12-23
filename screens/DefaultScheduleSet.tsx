@@ -2,6 +2,7 @@ import React, {useEffect, useRef, useState} from 'react';
 import {View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet, Image, Keyboard} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useNavigation} from "@react-navigation/core";
+import {useGroup} from "../components/GroupContext";
 
 function DefaultScheduleSet() {
     const [groupName, setGroupName] = useState('');
@@ -27,6 +28,7 @@ function DefaultScheduleSet() {
     }, []);
 
     const navigation = useNavigation();
+    const { setGroupNameContext } = useGroup();
 
     const handleSubmit = () => {
         setLoading(true); // начинаем загрузку
@@ -39,7 +41,7 @@ function DefaultScheduleSet() {
 
         fetch(`http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?name=${groupName}`)
             .then(response => response.json())
-            .then(data => {
+            .then(async data => {
                 clearTimeout(timeoutId);
 
                 const results = Array.isArray(data.GetNameUidForRaspResult.ItemRaspUID)
@@ -55,6 +57,9 @@ function DefaultScheduleSet() {
                 } else if (prepResults.length === 1 || groupResult) {
                     const result = prepResults.length ? prepResults[0] : groupResult;
                     const formattedTitle = result.Title.replace(/ {2,}/g, ' '); // Убираем лишние пробелы
+                    const value = AsyncStorage.getItem('@group_name');
+                    console.log(`value: ${value}, formattedTitle: ${formattedTitle}`)
+                    setGroupNameContext(await value);
                     storeGroupName(formattedTitle);
                     console.log(`Success ${formattedTitle}`)
                     setError(null);

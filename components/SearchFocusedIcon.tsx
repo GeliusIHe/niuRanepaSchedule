@@ -8,6 +8,7 @@ import {useNavigation} from "@react-navigation/core";
 import Schedule from "../screens/Schedule";
 import {useGroupId} from "./GroupIdContext";
 import FlatList = Animated.FlatList;
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type SearchFocusedIconType = {
   showCursor1?: boolean;
@@ -29,6 +30,16 @@ const getStyleValue = (key: string, value: string | number | undefined) => {
   if (value === undefined) return;
   return { [key]: value === "unset" ? undefined : value };
 };
+type ItemDetails = {
+  id: number;
+  title: string;
+  type: string;
+};
+
+type SelectedStarsType = {
+  [key: number]: ItemDetails | null;
+};
+
 const SearchFocusedIcon = ({
                              showCursor1,
                              searchFocusedIconPosition,
@@ -68,7 +79,43 @@ const SearchFocusedIcon = ({
   const [searchedGroupId, setSearchedGroupId] = useState(null);
   const [isShowingSelectedGroupSchedule, setIsShowingSelectedGroupSchedule] = useState(false);
   const [selectedGroupName, setSelectedGroupName] = useState("");
+  const [selectedStars, setSelectedStars] = useState<SelectedStarsType>({});
 
+  useEffect(() => {
+    const loadSelectedItems = async () => {
+      try {
+        const savedData = await AsyncStorage.getItem('selectedStars');
+        const selectedItems = savedData ? JSON.parse(savedData) : {};
+        setSelectedStars(selectedItems);
+      } catch (error) {
+        console.error("Ошибка при загрузке выбранных элементов:", error);
+      }
+    };
+
+    loadSelectedItems();
+  }, []);
+
+  function sortGroups(a: { Title: string; }, b: { Title: string; }) {
+    // Разделяем строку на буквенную и цифровую части
+    const matchA = a.Title.match(/([a-zA-Z]+)(\d+)/);
+    const matchB = b.Title.match(/([a-zA-Z]+)(\d+)/);
+
+    // Проверяем, удалось ли разделить строку
+    if (matchA && matchB) {
+      const prefixA = matchA[1], numberA = parseInt(matchA[2]);
+      const prefixB = matchB[1], numberB = parseInt(matchB[2]);
+
+      // Сначала сравниваем буквенные части
+      if (prefixA < prefixB) return -1;
+      if (prefixA > prefixB) return 1;
+
+      // Если буквенные части равны, сравниваем числовые части
+      return numberA - numberB;
+    }
+
+    // В случае, если не удалось разделить строку, сравниваем исходные строки
+    return a.Title.localeCompare(b.Title);
+  }
 
 
   const { setGroupId } = useGroupId();
@@ -113,7 +160,10 @@ const SearchFocusedIcon = ({
         .then(suggestions => {
           if (suggestions && suggestions.length > 0) {
             // Если есть результаты от api.geliusihe, используем их и не выполняем запрос к services.niu.ranepa.ru
+            console.log(suggestions)
+            suggestions.sort(sortGroups);
             setSearchResults(suggestions);
+            console.log(suggestions)
           } else {
             // Если нет результатов от api.geliusihe, выполняем запрос к services.niu.ranepa.ru
             return fetch(`http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?name=${query}`);
@@ -214,6 +264,65 @@ const SearchFocusedIcon = ({
   const handleBackToSearchClick = () => {
     setIsShowingSelectedGroupSchedule(false); // скрываем расписание, возвращаясь к поиску
   };
+  const handleStarClick = async (item: ItemDetails) => {
+    const newStars: SelectedStarsType = {
+      ...selectedStars,
+      [item.id]: selectedStars[item.id] ? null : item
+    };
+
+    setSelectedStars(newStars);
+    await AsyncStorage.setItem('selectedStars', JSON.stringify(newStars));
+  };
+
+
+  const hasSelectedItems = () => {
+    const hasItems = Object.values(selectedStars).some(value => value);
+    return hasItems;
+  };
+
+  const renderSelectedItems = () => {
+    return Object.entries(selectedStars)
+        .filter(([, item]) => item !== null)
+        .map(([id, item]) => {
+          if (!item) return null;
+
+          return (
+              <TouchableOpacity key={id} onPress={() => handleGroupClick(item.id, item.title)}>
+                <View>
+                  <View style={{ alignItems: 'flex-start',
+                    marginBottom: 15,
+                    paddingLeft: 20,
+                    borderStyle: "solid",
+                    borderColor: Color.colorDarkslategray_100,
+                    borderBottomWidth: 0.5, }}>
+                    <Text style={[styles.resultText, styles.boldText]}>
+                      {item.title}
+                    </Text>
+                    <Text style={[styles.additionalText, {marginBottom: 15,}]}>
+                      {item.type === "Group" ? `СПО, ${extractCourseNumber(item.title)} курс, очная форма` : "Информация о преподавателе"}
+                    </Text>
+                  </View>
+                  <TouchableOpacity     style={{
+                    position: 'absolute',
+                    right: 30,
+                    transform: [{ translateY: 5 }] // Половина высоты иконки для центрирования
+                  }}
+                                        onPress={() => handleStarClick({
+                                          id: item.id,
+                                          title: item?.title,
+                                          type: item.type,
+                                        })}>
+                    <Image
+                        source={selectedStars[item.id] ? require("../assets/yellow-star.png") : require("../assets/gray-star.png")}
+                        style={{ width: 30, height: 30 }}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+          );
+        });
+  };
+
 
   return (
       <View style={styles.mainContainer}>
@@ -256,7 +365,10 @@ const SearchFocusedIcon = ({
               <View style={styles.inputLine}></View>
 
               <View style={styles.resultContainer}>
-                <FlatList style={[{marginBottom: 195}]}
+                <FlatList
+                    style={{
+                      marginBottom: searchQuery === '' ? 35 : 195
+                    }}
                     data={searchResults}
                     renderItem={({ item }) => (
                         <TouchableOpacity onPress={() => handleGroupClick(item.id, item.Title)}>
@@ -273,6 +385,27 @@ const SearchFocusedIcon = ({
                               <Text style={styles.additionalText}>
                                 {item.Type === "Group" ? `СПО, ${extractCourseNumber(item.Title)} курс, очная форма` : "Информация о преподавателе"}
                               </Text>
+                              {item.Type === "Group" && (
+                                  <TouchableOpacity
+                                      style={{
+                                        position: 'absolute',
+                                        right: 30,
+                                        top: '25%',
+                                        transform: [{ translateY: -15 }] // Половина высоты иконки для центрирования
+                                      }}
+                                      onPress={() => handleStarClick({
+                                        id: item.id,
+                                        title: item.Title,
+                                        type: item.Type,
+                                      })}
+                                  >
+                                    <Image
+                                        source={selectedStars[item.id] ? require("../assets/yellow-star.png") : require("../assets/gray-star.png")}
+                                        style={{ width: 30, height: 30 }}
+                                    />
+                                  </TouchableOpacity>
+                              )}
+
                             </View>
                           </View>
                         </TouchableOpacity>
@@ -281,13 +414,20 @@ const SearchFocusedIcon = ({
                 />
               </View>
 
-              {searchQuery === '' ? (
-                  <View style={styles.content}>
-                    <Text style={styles.contentText}>
-                      {`Приложение сможет найти расписание преподавателя, группы и аудитории 👍`}
-                    </Text>
-                  </View>
-              ) : null}
+              {searchQuery === '' && (
+                  hasSelectedItems() ? (
+                      <View style={{marginTop: -18}}>
+                        {renderSelectedItems()}
+                      </View>
+                  ) : (
+                      <View style={[styles.content, {marginTop: 195}]}>
+                        <Text style={styles.contentText}>
+                          {`Приложение сможет найти расписание преподавателя, группы и аудитории 👍`}
+                        </Text>
+                      </View>
+                  )
+              )}
+
             </>
         )}
       </View>

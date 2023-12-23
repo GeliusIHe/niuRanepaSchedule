@@ -27,7 +27,7 @@ const App = () => {
             try {
 
                 // Отправка версии приложения на сервер
-                const appVersion = 'previewBuild-1.0.1-sdj1m23hcu';
+                const appVersion = 'preRelease-1.0.0-122323';
                 const response = await axios.get(`https://api.geliusihe.ru/getData/${appVersion}`, { timeout: 3000 });
 
                 // Проверка access и установка состояния ошибки версии
@@ -42,7 +42,7 @@ const App = () => {
                 const failedAttempts = await AsyncStorage.getItem('failedAttempts') || '0';
                 const attempts = parseInt(failedAttempts, 10);
 
-                if (attempts < 4) {
+                if (attempts < 3) {
                     // Увеличение счётчика при неудачной попытке
                     await AsyncStorage.setItem('failedAttempts', (attempts + 1).toString());
                 } else {
