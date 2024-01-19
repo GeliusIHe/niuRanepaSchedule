@@ -181,9 +181,11 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
 
     try {
       const value = await AsyncStorage.getItem('@group_name');
+      const daysMarginString = await AsyncStorage.getItem('@daysMargin');
+      const daysMargin = daysMarginString ? parseInt(daysMarginString, 10) - 2 : 13;
       const actualGroupName = groupName || value || null;
       const startDateForNextFetch = addDays(endDate, 2);
-      const newEndDate = addDays(startDateForNextFetch, 13);
+      const newEndDate = addDays(startDateForNextFetch, daysMargin);
       setEndDate(newEndDate);
       const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${formatDate(startDateForNextFetch)}&dfinish=${formatDate(newEndDate)}`;
 
@@ -247,8 +249,34 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
   }, [stableSchedule]); // Этот useEffect будет вызван, когда stableSchedule обновится
 
   useEffect(() => {
+
+    const checkServerConnection = async () => {
+      let attempts = parseInt(await AsyncStorage.getItem('failedAttempts') as string) || 0;
+
+      try {
+        const appVersion = 'release-1.1.0-011924';
+        const response = await axios.get(`https://api.geliusihe.ru/getData/${appVersion}`, { timeout: 3000 });
+
+        if (response.data.access === 0) {
+          // @ts-ignore
+          navigation.navigate('VersionError');
+        } else {
+          await AsyncStorage.setItem('failedAttempts', '0');
+        }
+      } catch (error) {
+        attempts += 1;
+        await AsyncStorage.setItem('failedAttempts', attempts.toString());
+
+        if (attempts >= 3) {
+          // @ts-ignore
+          navigation.navigate('VersionError');
+        }
+      }
+    }
+    checkServerConnection()
+
     const checkForUpdates = async () => {
-      const appVersion = 'preRelease-1.0.0-122323';
+      const appVersion = 'release-1.1.0-011924';
       try {
         const response = await axios.get(`https://api.geliusihe.ru/getData/${appVersion}`);
         if (response.data.latest === 0) {
@@ -335,9 +363,10 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       if (actualGroupName !== null) {
         console.log(`Загружено расписание ${actualGroupName}`);
         setData((actualGroupName || "").split(" ")[0] || null);
-
+        const daysMarginString = await AsyncStorage.getItem('@daysMargin');
+        const daysMargin = daysMarginString ? parseInt(daysMarginString, 10) : 7;
         const startDate = formatDate(new Date());
-        const endDate = formatDate(addDays(new Date(), 7));
+        const endDate = formatDate(addDays(new Date(), daysMargin));
         const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${startDate}&dfinish=${endDate}`;
 
         try {

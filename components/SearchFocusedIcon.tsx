@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   searchContainer: {
-    marginTop: 25,
+    marginTop: 20,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'lightgrey',

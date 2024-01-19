@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 19,
     fontWeight: "600",
-    color: Color.lightLabelPrimary,
+    color: "#424242",
     textAlign: "center",
   },
   title: {
@@ -145,9 +145,6 @@ const styles = StyleSheet.create({
   },
   headertitle: {
     backgroundColor: Color.lightBackgroundQuaternary,
-    borderStyle: "solid",
-    borderColor: Color.colorDarkslategray_100,
-    borderBottomWidth: 0.5,
     width: 400,
     height: 42,
   },

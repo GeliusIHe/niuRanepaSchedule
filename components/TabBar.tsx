@@ -126,7 +126,7 @@ const TabBar = ({
                             <Path transform="scale(1.25)" d="M8.5 8.73603C10.703 8.73603 12.5639 6.80354 12.5639 4.30327C12.5639 1.86276 10.6929 0 8.5 0C6.31716 0 4.44615 1.89264 4.44615 4.32319C4.45621 6.80354 6.3071 8.73603 8.5 8.73603ZM2.23314 18H14.7669C16.4266 18 17 17.5019 17 16.5955C17 14.0255 13.7207 10.4992 8.5 10.4992C3.28935 10.4992 0 14.0255 0 16.5955C0 17.5019 0.573373 18 2.23314 18Z" fill="#8E8E93"/>
                         </Svg>
                     }
-                    <Text style={[styles.text, {marginLeft: -5}, getTabStyles('Settings')]}>Профиль</Text>
+                    <Text style={[styles.text, {marginLeft: -5}, getTabStyles('Settings')]}>Настройки</Text>
                 </View>
             </TouchableOpacity>
         </View>
