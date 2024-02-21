@@ -361,34 +361,30 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       const actualGroupName = groupName || await getData();
 
       if (actualGroupName !== null) {
-        console.log(`Загружено расписание ${actualGroupName}`);
         setData((actualGroupName || "").split(" ")[0] || null);
-        const daysMarginString = await AsyncStorage.getItem('@daysMargin');
-        const daysMargin = daysMarginString ? parseInt(daysMarginString, 10) : 7;
-        const startDate = formatDate(new Date());
-        const endDate = formatDate(addDays(new Date(), daysMargin));
-        const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${startDate}&dfinish=${endDate}`;
+        const currentDate = new Date();
+        const formattedDate = ('0' + currentDate.getDate()).slice(-2) + '.' +
+            ('0' + (currentDate.getMonth() + 1)).slice(-2) + '.' +
+            currentDate.getFullYear();
+
+        const url = `https://api.geliusihe.ru/getSchedule?group=` + actualGroupName + '&startsFrom=' + formattedDate;
 
         try {
           const response = await fetch(url);
           if (!response.ok) {
             throw new Error(`HTTP error! Status: ${response.status}`);
           }
-
-          let data = await response.json();
+          let data = await response.json(); // Преобразование ответа из JSON
+          console.log(data); // Теперь 'data' содержит объект данных, который вы ожидали
           const resultKey = isGroup(actualGroupName) ? 'GetRaspGroupResult' : 'GetRaspPrepResult';
 
-          if (data[resultKey] && data[resultKey].RaspItem) {
-            const filteredScheduleData = filterPhysicalEducationLessons(data[resultKey].RaspItem);
+            const filteredScheduleData = filterPhysicalEducationLessons(data);
             setScheduleData(filterScheduleBySubject('', filteredScheduleData));
             try {
-              await AsyncStorage.setItem('scheduleData', JSON.stringify(data[resultKey].RaspItem));
+              await AsyncStorage.setItem('scheduleData', JSON.stringify(data));
             } catch (error) {
               console.error('Error caching schedule data:', error);
             }
-          } else {
-            console.error("Unexpected data structure");
-          }
         } catch (error) {
           console.error("An error occurred while fetching data:", error);
           // Устанавливаем таймер на 5 секунд перед установкой showNotification в true
@@ -403,9 +399,6 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     }
 
     fetchData();
-    intervalId = setInterval(() => {
-      fetchData();
-    }, 2500);
 
     return () => {
       clearInterval(intervalId);
@@ -421,23 +414,21 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     );
   }
 
-  function extractLessonType(lessonName: string = " "): string | undefined {
-    // Используем регулярные выражения для поиска и замены типов занятий
-    const lessonTypeMatch = lessonName.match(/\((.*?)\)/);
-
-    if (lessonTypeMatch && lessonTypeMatch[1]) {
-      let lessonType = lessonTypeMatch[1];
-
-      if (lessonType.includes("Практ.") || lessonType.includes("семин.")) {
-        return "Практика";
-      }
-
-      return lessonType;
-    } else {
-      // Возвращаем undefined, если тип занятия не найден
+  function extractLessonType(lessonName: string = ""): string | undefined {
+    // Проверяем наличие подстроки "пра" в названии урока (независимо от регистра)
+    if (lessonName.toLowerCase().includes("пра")) {
+      return "Практика";
+    }
+    // Проверяем наличие подстроки "Лек" в названии урока (независимо от регистра)
+    else if (lessonName.toLowerCase().includes("лек")) {
+      return "Лекция";
+    }
+    // Возвращаем undefined, если условия не соблюдены
+    else {
       return undefined;
     }
   }
+
   const handleButtonPress = () => {
     setEndDate(addDays(new Date(), 7));
     if (stableSchedule.length === 0) {
@@ -468,6 +459,9 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     // Убираем все символы, начиная с первой открывающей скобки
     let lessonInfo = splitLessonName[0].split('(')[0].trim();
 
+    // Удаление подстрок "лек" или "пра" из названия урока без учета регистра
+    lessonInfo = lessonInfo.replace(/;лек|;пра/gi, "").trim();
+
     // Получаем имя преподавателя или используем заполнитель, если имя отсутствует
     const teacher = splitLessonName.length > 1 ? splitLessonName[1].trim() : "";
 
@@ -476,6 +470,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       lessonInfo
     };
   }
+
   const handleUpdatePress = () => {
     console.log(updateUrl)
     if (updateUrl) {
@@ -584,18 +579,6 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                     setLoadMoreButtonPosition(layout.y);
                   }}
               >
-                {!showNotification && <TouchableOpacity
-                    onPress={loadMoreData}
-                    disabled={isFetchingMore}
-                    style={styles.button}
-                >
-                  <View style={styles.buttoncontainer}>
-                    {isFetchingMore
-                        ? <ActivityIndicator color="white"/>
-                        : <Text style={styles.buttontext}>ЗАГРУЗИТЬ ЕЩЕ</Text>
-                    }
-                  </View>
-                </TouchableOpacity>}
               </View>
           )}
         </ScrollView>
@@ -710,7 +693,7 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.tabBarMedium,
     lineHeight: 24,
     letterSpacing: 0,
-    fontSize: 18,
+    fontSize: 20,
   },
   textTypoSearch: {
     fontFamily: FontFamily.tabBarMedium,
@@ -750,7 +733,7 @@ const styles = StyleSheet.create({
   text: {
     fontWeight: "600",
     color: Color.lightLabelPrimary,
-    textAlign: "center",
+    textAlign: "left",
   },
   title: {
     marginLeft: -66.5,

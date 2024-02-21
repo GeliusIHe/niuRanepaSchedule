@@ -1,5 +1,5 @@
 import React, {useEffect, useRef, useState} from 'react';
-import {View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet, Image, Keyboard} from 'react-native';
+import {ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useNavigation} from "@react-navigation/core";
 import {useGroup} from "../components/GroupContext";
@@ -30,51 +30,33 @@ function DefaultScheduleSet() {
     const navigation = useNavigation();
     const { setGroupNameContext } = useGroup();
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         setLoading(true); // начинаем загрузку
         setError(null); // сбрасываем ошибку
 
-        const timeoutId = setTimeout(() => {
-            setLoading(false); // останавливаем загрузку
-            setError('Сервер не отвечает. Проверьте подключение к интернету'); // устанавливаем ошибку таймаута
-        }, 5000); // устанавливаем таймаут 5 секунд
-
-        fetch(`http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?name=${groupName}`)
-            .then(response => response.json())
-            .then(async data => {
-                clearTimeout(timeoutId);
-
-                const results = Array.isArray(data.GetNameUidForRaspResult.ItemRaspUID)
-                    ? data.GetNameUidForRaspResult.ItemRaspUID
-                    : [data.GetNameUidForRaspResult.ItemRaspUID];
-
-                const prepResults = results.filter((item: { Type: string; }) => item.Type === "Prep");
-                const groupResult = results.find((item: { Type: string; }) => item.Type === "Group");
-
-                if (prepResults.length > 1) {
-                    setError('Найдено слишком много преподавателей. Уточните запрос.');
-                    setLoading(false);
-                } else if (prepResults.length === 1 || groupResult) {
-                    const result = prepResults.length ? prepResults[0] : groupResult;
-                    const formattedTitle = result.Title.replace(/ {2,}/g, ' '); // Убираем лишние пробелы
-                    const value = AsyncStorage.getItem('@group_name');
-                    console.log(`value: ${value}, formattedTitle: ${formattedTitle}`)
-                    setGroupNameContext(await value);
-                    storeGroupName(formattedTitle);
-                    console.log(`Success ${formattedTitle}`)
-                    setError(null);
-                    navigation.navigate('Schedule');
-                } else {
-                    setError(`Такой группы или преподавателя не существует. Полученные данные: ${JSON.stringify(data)}`);
-                    setLoading(false);
-                }
-            })
-            .catch(error => {
-                clearTimeout(timeoutId); // очищаем таймаут при ошибке
-                setLoading(false); // останавливаем загрузку
-                setError('Произошла ошибка при получении данных.');
-            });
+        try {
+            const response = await fetch(`https://api.geliusihe.ru/check?group=${groupName}`);
+            if (response.ok) {
+                await AsyncStorage.setItem('@group_name', groupName);
+                console.log(`formattedTitle: ${groupName}`)
+                setGroupNameContext(groupName);
+                storeGroupName(groupName);
+                console.log(`Success ${groupName}`)
+                setError(null);
+                navigation.navigate('Schedule');
+            } else {
+                // Если группа не найдена
+                throw new Error(`Группа ${groupName} не найдена`);
+            }
+        } catch (error) {
+            // Обработка ошибок запроса или логики
+            console.error(error);
+            setError('На сервере нет расписания этой группы.');
+        } finally {
+            setLoading(false); // останавливаем загрузку в любом случае
+        }
     };
+
 
     return (
         <View style={styles.container}>

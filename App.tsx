@@ -30,7 +30,7 @@ const App = () => {
       <GroupProvider>
           <GroupIdProvider>
               <NavigationContainer>
-                  <StatusBar hidden={true} />
+                  <StatusBar barStyle="light-content" backgroundColor="#BFBFBF" />
                   <Stack.Navigator initialRouteName={'Schedule'} screenOptions={{ headerShown: false }}>
                       <Stack.Screen name="StartScreen" component={StartScreen} />
                       <Stack.Screen name="Schedule" component={Schedule} />
