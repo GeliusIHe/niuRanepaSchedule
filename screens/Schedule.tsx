@@ -2,7 +2,6 @@ import * as React from "react";
 import {useEffect, useRef, useState} from "react";
 import {
   ActivityIndicator,
-  Button,
   Linking,
   ScrollView,
   StyleSheet,
@@ -13,13 +12,11 @@ import {
 } from "react-native";
 import TableSubheadings from "../components/TableSubheadings";
 import LessonCard from "../components/LessonCard";
-import HeaderTitleIcon from "../components/HeaderTitleIcon";
 import TabBar from "../components/TabBar";
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import {Color, FontFamily, FontSize, Padding} from "../GlobalStyles";
+import {Color, FontFamily, Padding} from "../GlobalStyles";
 import {useGroupId} from "../components/GroupIdContext";
 import {useGroup} from "../components/GroupContext";
-import {find} from "lodash";
 import Modal from "react-native-modal";
 import {Image} from "expo-image";
 import axios from "axios";
@@ -28,6 +25,7 @@ import {useNavigation} from "@react-navigation/core";
 type ScheduleItem = {
   date: string;
   timestart: string;
+  namegroup?: string;
   timefinish: string;
   name: string;
   aydit: string;
@@ -254,7 +252,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       let attempts = parseInt(await AsyncStorage.getItem('failedAttempts') as string) || 0;
 
       try {
-        const appVersion = 'release-1.2.0-011924';
+        const appVersion = 'release-1.2.1-011924';
         const response = await axios.get(`https://api.geliusihe.ru/getData/${appVersion}`, { timeout: 3000 });
 
         if (response.data.access === 0) {
@@ -335,6 +333,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     loadCachedData();
 
   }, [actualGroupId]);
+  
 // Кастомный хук для отслеживания изменений в AsyncStorage
   useEffect(() => {
     let isInitialLoad = true;
@@ -380,6 +379,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
 
           if (data[resultKey] && data[resultKey].RaspItem) {
             const filteredScheduleData = filterPhysicalEducationLessons(data[resultKey].RaspItem);
+            console.log(filteredScheduleData)
             setScheduleData(filterScheduleBySubject('', filteredScheduleData));
             try {
               await AsyncStorage.setItem('scheduleData', JSON.stringify(data[resultKey].RaspItem));
@@ -402,15 +402,14 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     }
     intervalIdRef.current = setInterval(fetchData, 2500) as unknown as number;
 
-    fetchData(); // Вызываем fetchData в первый раз для инициализации
+    fetchData(); 
 
     return () => {
-      // Очищаем интервал при размонтировании компонента, используя значение из ref
       if (intervalIdRef.current !== null) {
         clearInterval(intervalIdRef.current);
       }
     };
-  }, [actualGroupId, groupNameContext]); // Не забудьте указать все необходимые зависимости
+  }, [actualGroupId, groupNameContext]); 
 
 
   if (isLoading) {
@@ -421,23 +420,31 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     );
   }
 
-  function extractLessonType(lessonName: string = " "): string | undefined {
-    // Используем регулярные выражения для поиска и замены типов занятий
+  function extractLessonType(lessonName: string = " ", nameGroup: string = ""): string | undefined {
     const lessonTypeMatch = lessonName.match(/\((.*?)\)/);
-
-    if (lessonTypeMatch && lessonTypeMatch[1]) {
-      let lessonType = lessonTypeMatch[1];
-
+    let lessonType = lessonTypeMatch && lessonTypeMatch[1] ? lessonTypeMatch[1] : undefined;
+  
+    if (lessonType) {
       if (lessonType.includes("Практ.") || lessonType.includes("семин.")) {
-        return "Практика";
+        lessonType = "Практика";
+      } else if (lessonType.toLowerCase().includes("лабораторная работа")) {
+        const groupNumber = nameGroup.match(/\d+/); 
+        if (groupNumber) {
+          lessonType = `Лабораторная работа (Группа ${groupNumber[0]})`;
+        } else {
+          lessonType = "Лабораторная работа";
+        }
+      } else {
+        lessonType = lessonType.charAt(0).toUpperCase() + lessonType.slice(1).toLowerCase();
       }
-
       return lessonType;
     } else {
-      // Возвращаем undefined, если тип занятия не найден
       return undefined;
     }
   }
+  
+  
+
   const handleButtonPress = () => {
     setEndDate(addDays(new Date(), 7));
     if (stableSchedule.length === 0) {
@@ -554,7 +561,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                               key={lessonIndex}
                               prop={lesson.timestart}
                               prop1={lesson.timefinish}
-                              prop2={extractLessonType(lesson.name)}
+                              prop2={extractLessonType(lesson.name, lesson.namegroup)}
                               preMedi={processLessonName(lesson.name).lessonInfo}
                               teacherName={processLessonName(lesson.name).teacher}
                               prop3={
