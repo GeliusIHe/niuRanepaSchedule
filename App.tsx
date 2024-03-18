@@ -17,6 +17,7 @@ import VersionError from "./screens/VersionError";
 
 const Stack = createNativeStackNavigator();
 const App = () => {
+
     const [fontsLoaded, error] = useFonts({
         "SFProText-Regular": require("./assets/fonts/SFProText-Regular.otf"),
     });
@@ -26,23 +27,23 @@ const App = () => {
         return null;
     }
 
-  return (
-      <GroupProvider>
-          <GroupIdProvider>
-              <NavigationContainer>
-                  <StatusBar hidden={true} />
-                  <Stack.Navigator initialRouteName={'Schedule'} screenOptions={{ headerShown: false }}>
-                      <Stack.Screen name="StartScreen" component={StartScreen} />
-                      <Stack.Screen name="Schedule" component={Schedule} />
-                      <Stack.Screen name="VersionError" component={VersionError} />
-                      <Stack.Screen name="SearchTyping" component={SearchTyping} />
-                      <Stack.Screen name="Settings" component={Settings} />
-                      <Stack.Screen name="DefaultScheduleSet" component={DefaultScheduleSet} />
-                  </Stack.Navigator>
-              </NavigationContainer>
-          </GroupIdProvider>
-      </GroupProvider>
-  );
+    return (
+        <GroupProvider>
+            <GroupIdProvider>
+                <NavigationContainer>
+                    <StatusBar barStyle="light-content" backgroundColor="#BFBFBF" />
+                    <Stack.Navigator initialRouteName={'Schedule'} screenOptions={{ headerShown: false }}>
+                        <Stack.Screen name="StartScreen" component={StartScreen} />
+                        <Stack.Screen name="Schedule" component={Schedule} />
+                        <Stack.Screen name="VersionError" component={VersionError} />
+                        <Stack.Screen name="SearchTyping" component={SearchTyping} />
+                        <Stack.Screen name="Settings" component={Settings} />
+                        <Stack.Screen name="DefaultScheduleSet" component={DefaultScheduleSet} />
+                    </Stack.Navigator>
+                </NavigationContainer>
+            </GroupIdProvider>
+        </GroupProvider>
+    );
 };
 
 const styles = StyleSheet.create({

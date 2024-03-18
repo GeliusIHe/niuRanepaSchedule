@@ -6,7 +6,7 @@ import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 const VersionError = () => {
     const [comment, setComment] = useState('');
     const [isLoading, setIsLoading] = useState(true);
-    const appVersion = 'release-1.0.0-122823';
+    const appVersion = 'release-1.2.0-122823';
 
     useEffect(() => {
         const fetchComment = async () => {

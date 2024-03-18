@@ -86,7 +86,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
   const scrollViewRef = React.useRef<ScrollView>(null);
   const [isFetchingMore, setIsFetchingMore] = React.useState(false);
   const [endDate, setEndDate] = React.useState(addDays(new Date(), 7));
-
+  const intervalIdRef = useRef<number | null>(null);
   const [scheduleData, setScheduleData] = React.useState<ScheduleItem[]>([]);
   const [data, setData] = useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -254,7 +254,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       let attempts = parseInt(await AsyncStorage.getItem('failedAttempts') as string) || 0;
 
       try {
-        const appVersion = 'release-1.1.0-011924';
+        const appVersion = 'release-1.2.0-011924';
         const response = await axios.get(`https://api.geliusihe.ru/getData/${appVersion}`, { timeout: 3000 });
 
         if (response.data.access === 0) {
@@ -276,7 +276,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     checkServerConnection()
 
     const checkForUpdates = async () => {
-      const appVersion = 'release-1.1.0-011924';
+      const appVersion = 'release-1.2.0-011924';
       try {
         const response = await axios.get(`https://api.geliusihe.ru/getData/${appVersion}`);
         if (response.data.latest === 0) {
@@ -337,18 +337,14 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
   }, [actualGroupId]);
 // Кастомный хук для отслеживания изменений в AsyncStorage
   useEffect(() => {
-    let intervalId: string | number | NodeJS.Timeout | undefined;
     let isInitialLoad = true;
 
-    async function fetchData() {
-
+    const fetchData = async () => {
       const getData = async () => {
         try {
           const value = await AsyncStorage.getItem('@group_name');
           if (value == null && isInitialLoad) {
-            // Если @group_name null и это первая загрузка, перенаправляем на StartScreen
-            isInitialLoad = false; // Обновляем флаг, чтобы предотвратить повторное перенаправление
-            // @ts-ignore
+            isInitialLoad = false;
             navigation.navigate('StartScreen');
           }
           return value || null;
@@ -361,6 +357,10 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
       const actualGroupName = groupName || await getData();
 
       if (actualGroupName !== null) {
+        if (intervalIdRef.current !== null) {
+          clearInterval(intervalIdRef.current);
+          intervalIdRef.current = null; // Сбрасываем значение ref
+        }
         console.log(`Загружено расписание ${actualGroupName}`);
         setData((actualGroupName || "").split(" ")[0] || null);
         const daysMarginString = await AsyncStorage.getItem('@daysMargin');
@@ -397,20 +397,20 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
           }, 5000);
         } finally {
           setIsLoading(false);
-          clearInterval(intervalId);
         }
       }
     }
+    intervalIdRef.current = setInterval(fetchData, 2500) as unknown as number;
 
-    fetchData();
-    intervalId = setInterval(() => {
-      fetchData();
-    }, 2500);
+    fetchData(); // Вызываем fetchData в первый раз для инициализации
 
     return () => {
-      clearInterval(intervalId);
+      // Очищаем интервал при размонтировании компонента, используя значение из ref
+      if (intervalIdRef.current !== null) {
+        clearInterval(intervalIdRef.current);
+      }
     };
-  }, [actualGroupId, groupNameContext]);
+  }, [actualGroupId, groupNameContext]); // Не забудьте указать все необходимые зависимости
 
 
   if (isLoading) {

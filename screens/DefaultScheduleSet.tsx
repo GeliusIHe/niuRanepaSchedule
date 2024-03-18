@@ -72,7 +72,7 @@ function DefaultScheduleSet() {
             .catch(error => {
                 clearTimeout(timeoutId); // очищаем таймаут при ошибке
                 setLoading(false); // останавливаем загрузку
-                setError('Произошла ошибка при получении данных.');
+                setError(`Произошла ошибка при получении данных. ${error}`);
             });
     };
 
