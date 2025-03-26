@@ -87,6 +87,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     const actualGroupId = groupIdProp !== null ? groupIdProp : groupIdFromHook;
     const [loadMoreButtonPosition, setLoadMoreButtonPosition] = useState(0);
     const [showNotification, setShowNotification] = useState(false);
+    const [startDate, setStartDate] = useState(new Date());
 
     const scrollViewRef = React.useRef<ScrollView>(null);
     const [isFetchingMore, setIsFetchingMore] = React.useState(false);
@@ -103,13 +104,16 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     const [suggestion, setSuggestion] = useState<string>('');
     const [stableSchedule, setStableSchedule] = useState<ScheduleItem[]>([]);
     const [error, setError] = useState(null);
-    const inputRef = useRef<TextInput>(null); // указываем TextInput как тип ссылки
+    const inputRef = useRef<TextInput>(null);
     const navigation = useNavigation();
-    const [searchQuery, setSearchQuery] = useState(''); // для хранения запроса пользователя
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Track whether we have other cached schedules
     const [hasOtherCachedSchedules, setHasOtherCachedSchedules] = useState(false);
     const [errorMessage, setErrorMessage] = useState("Не удалось извлечь новые данные с сервера");
+
+    // Объект для хранения позиций дат в скролле
+    const [datePositions, setDatePositions] = useState<{[key: string]: number}>({});
 
     function formatHumanReadableDate(dateString: string): string {
         const date = parseDate(dateString);
@@ -368,7 +372,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
         }
     }
 
-    // Update the fallback logic in fetchData for better handling when server is unreachable
+    // Update the fetchData function to scroll to current day
     useEffect(() => {
         let isInitialLoad = true;
 
@@ -398,9 +402,11 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                 setData((actualGroupName || "").split(" ")[0] || null);
                 const daysMarginString = await AsyncStorage.getItem('@daysMargin');
                 const daysMargin = daysMarginString ? parseInt(daysMarginString, 10) : 7;
-                const startDate = formatDate(new Date());
-                const endDate = formatDate(addDays(new Date(), daysMargin));
-                const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${startDate}&dfinish=${endDate}`;
+                const currentDate = new Date();
+                setStartDate(currentDate); // Инициализируем startDate текущей датой при первой загрузке
+                const startDateStr = formatDate(currentDate);
+                const endDate = formatDate(addDays(currentDate, daysMargin));
+                const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${startDateStr}&dfinish=${endDate}`;
 
                 try {
                     // First check if we have cached data for this group
@@ -445,6 +451,11 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                             // Cache using group-specific key
                             const cacheKey = getCacheKey(actualGroupName);
                             await AsyncStorage.setItem(cacheKey, JSON.stringify(data[resultKey].RaspItem));
+                            
+                            // After data is loaded, scroll to today's schedule
+                            setTimeout(() => {
+                                scrollToCurrentDay();
+                            }, 500);
                         } catch (error) {
                             console.error('Error caching schedule data:', error);
                         }
@@ -462,6 +473,11 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                             const filteredScheduleData = filterPhysicalEducationLessons(data);
                             setScheduleData(filterScheduleBySubject('', filteredScheduleData));
                             console.log(`Loaded schedule for ${actualGroupName} from cache`);
+                            
+                            // After cache data is loaded, scroll to today's schedule
+                            setTimeout(() => {
+                                scrollToCurrentDay();
+                            }, 500);
                         } else {
                             // No cache available for this specific group
                             // Check if we have ANY cached schedules
@@ -502,6 +518,188 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
             }
         };
     }, [actualGroupId, groupNameContext]);
+
+    // Add function to scroll to current day's schedule
+    const scrollToCurrentDay = () => {
+        const today = formatDate(new Date());
+        
+        // Find closest date position to today
+        const dateKeys = Object.keys(datePositions).sort((a, b) => {
+            const dateA = parseDate(a);
+            const dateB = parseDate(b);
+            if (dateA && dateB) {
+                return dateA.getTime() - dateB.getTime();
+            }
+            return 0;
+        });
+        
+        // Try to find today's date
+        let targetDate = today;
+        let targetPosition = datePositions[targetDate];
+        
+        // If today's date is not found, find the closest date
+        if (!targetPosition) {
+            const todayTimestamp = new Date(today.split('.').reverse().join('-')).getTime();
+            
+            // Find closest date to today
+            let closestDate = '';
+            let minDiff = Number.MAX_SAFE_INTEGER;
+            
+            for (const date of dateKeys) {
+                const parsedDate = parseDate(date);
+                if (parsedDate) {
+                    const diff = Math.abs(parsedDate.getTime() - todayTimestamp);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        closestDate = date;
+                    }
+                }
+            }
+            
+            if (closestDate) {
+                targetPosition = datePositions[closestDate];
+            }
+        }
+        
+        // Scroll to the position if found
+        if (targetPosition && scrollViewRef.current) {
+            scrollViewRef.current.scrollTo({ 
+                x: 0, 
+                y: targetPosition, 
+                animated: true 
+            });
+        }
+    };
+
+    // Функция для загрузки данных за предыдущую неделю
+    async function loadPreviousWeekData() {
+        setIsFetchingMore(true);
+        
+        const timeoutId = setTimeout(() => {
+            setShowNotification(true);
+        }, 5000);
+        
+        try {
+            const value = await AsyncStorage.getItem('@group_name');
+            const daysMarginString = await AsyncStorage.getItem('@daysMargin');
+            const daysMargin = daysMarginString ? parseInt(daysMarginString, 10) - 2 : 13;
+            const actualGroupName = groupName || value || null;
+            
+            // Вычисляем новую начальную дату (на 7 дней назад от текущей startDate)
+            const newStartDate = addDays(startDate, -7);
+            const newEndDate = addDays(startDate, -1); // До дня перед текущей начальной датой
+            
+            // Запоминаем дату, к которой нужно будет прокрутить (последний день новой загрузки)
+            const targetDateStr = formatDate(newEndDate);
+            
+            // Обновляем состояние начальной даты
+            setStartDate(newStartDate);
+            
+            const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${formatDate(newStartDate)}&dfinish=${formatDate(newEndDate)}`;
+            
+            const response = await fetch(url);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            
+            clearTimeout(timeoutId);
+            
+            let newData = await response.json();
+            
+            if (!newData) {
+                throw new Error(`Invalid response data`);
+            }
+            
+            const resultKey = isGroup(actualGroupName) ? 'GetRaspGroupResult' : 'GetRaspPrepResult';
+            
+            if (newData[resultKey] && newData[resultKey].RaspItem) {
+                const flatNewData = [].concat(...newData[resultKey].RaspItem);
+                const filteredScheduleData = filterPhysicalEducationLessons(flatNewData);
+                
+                // Обновляем состояние, добавляя новые данные в начало списка
+                setScheduleData(prevData => {
+                    const combinedData = [...filterScheduleBySubject(subjectName, filteredScheduleData), ...prevData];
+                    
+                    // Обновляем кеш с объединенными данными
+                    try {
+                        const cacheKey = getCacheKey(actualGroupName);
+                        AsyncStorage.setItem(cacheKey, JSON.stringify(combinedData))
+                            .catch(error => console.error('Error updating cache with combined data:', error));
+                    } catch (error) {
+                        console.error('Error preparing cache update:', error);
+                    }
+                    
+                    return combinedData;
+                });
+
+                // Даем время отрендерить новые данные, а затем скроллим к нужной дате
+                setTimeout(() => {
+                    // Ищем позицию для последнего дня загруженной недели (день перед текущей начальной датой)
+                    // Это позволит нам плавно перенести пользователя на предыдущий день перед тем, что он видел
+                    
+                    // Попытка найти день, который был последним в новой загрузке (ближайший к предыдущей startDate)
+                    const targetDate = targetDateStr;
+                    let targetPosition = datePositions[targetDate];
+                    
+                    // Если точно такой даты нет, ищем ближайшую
+                    if (!targetPosition) {
+                        // Сортируем даты
+                        const dateKeys = Object.keys(datePositions).sort((a, b) => {
+                            const dateA = parseDate(a);
+                            const dateB = parseDate(b);
+                            if (dateA && dateB) {
+                                return dateA.getTime() - dateB.getTime();
+                            }
+                            return 0;
+                        });
+                        
+                        // Преобразуем целевую дату в timestamp для сравнения
+                        const targetTimestamp = parseDate(targetDate)?.getTime() || 0;
+                        
+                        // Ищем ближайшую дату к целевой
+                        let closestDate = '';
+                        let minDiff = Number.MAX_SAFE_INTEGER;
+                        
+                        for (const date of dateKeys) {
+                            const parsedDate = parseDate(date);
+                            if (parsedDate) {
+                                const diff = Math.abs(parsedDate.getTime() - targetTimestamp);
+                                if (diff < minDiff) {
+                                    minDiff = diff;
+                                    closestDate = date;
+                                }
+                            }
+                        }
+                        
+                        if (closestDate) {
+                            targetPosition = datePositions[closestDate];
+                        }
+                    }
+                    
+                    // Если нашли позицию, скроллим к ней
+                    if (targetPosition && scrollViewRef.current) {
+                        scrollViewRef.current.scrollTo({ 
+                            x: 0, 
+                            y: targetPosition, 
+                            animated: true 
+                        });
+                    } else {
+                        // Если позицию не нашли по какой-то причине, просто скроллим в начало
+                        if (scrollViewRef.current) {
+                            scrollViewRef.current.scrollTo({ x: 0, y: 0, animated: true });
+                        }
+                    }
+                }, 300); // Даем больше времени для рендеринга
+            } else {
+                console.error(`Unexpected data structure in loadPreviousWeekData response`);
+            }
+        } catch (error) {
+            console.error('Error fetching previous week schedule:', error);
+        } finally {
+            setIsFetchingMore(false);
+        }
+    }
 
     // Check for cached schedules on mount
     useEffect(() => {
@@ -627,7 +825,6 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                     ) : (
                         <Text style={[styles.text, styles.textTypo]}>{data}</Text>
                     )}
-
                 </View>
                 <View style={[styles.rightAccessory, styles.accessoryFlexBox]}>
                     <View style={[styles.iconsleft, styles.accessoryFlexBox]}>
@@ -646,7 +843,8 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                 style={{
                     marginTop: groupName ? 0 : 66, // Устанавливаем marginTop в зависимости от наличия groupName
                     marginBottom: 75
-                }}        >
+                }}        
+            >
                 <>
                     {showNotification && (
                         <View style={{ backgroundColor: 'red', padding: 10, alignItems: 'center' }}>
@@ -666,14 +864,55 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                         <Text style={[{ marginTop: 0, color: '#8E8E93' }, styles.textTypoSearch]}>{isGroup(groupName) ? 'Информация о группе' : 'Информация о преподавателе'}</Text>
                     </View>
                 )}
+                
+                {/* Кнопка для загрузки расписания за прошлую неделю */}
+                <TouchableOpacity
+                    style={{ 
+                        backgroundColor: '#007AFF', 
+                        padding: 10, 
+                        borderRadius: 8, 
+                        marginHorizontal: 20,
+                        marginVertical: 10,
+                        alignItems: 'center',
+                    }}
+                    onPress={loadPreviousWeekData}
+                    disabled={isFetchingMore}
+                >
+                    <Text style={{ color: 'white', fontWeight: '600' }}>
+                        {isFetchingMore ? 'Загрузка...' : 'Расписание прошлой недели'}
+                    </Text>
+                </TouchableOpacity>
+                
                 {Object.entries(groupedScheduleData).length > 0 ? (
-                    Object.entries(groupedScheduleData).map(([date, lessonsForTheDay], index) => (
+                    Object.entries(groupedScheduleData)
+                        .sort(([dateA], [dateB]) => {
+                            // Сортировка дат
+                            const parsedDateA = parseDate(dateA);
+                            const parsedDateB = parseDate(dateB);
+                            if (parsedDateA && parsedDateB) {
+                                return parsedDateA.getTime() - parsedDateB.getTime();
+                            }
+                            return 0;
+                        })
+                        .map(([date, lessonsForTheDay], index) => (
                         <React.Fragment key={index}>
-                            <TableSubheadings noteTitle={formatHumanReadableDate(date)} />
+                            <View 
+                                onLayout={(event) => {
+                                    // Запоминаем позицию каждой даты в скролле
+                                    const layout = event.nativeEvent.layout;
+                                    setDatePositions(prev => ({
+                                        ...prev,
+                                        [date]: layout.y
+                                    }));
+                                }}
+                            >
+                                <TableSubheadings noteTitle={formatHumanReadableDate(date)} />
+                            </View>
 
                             {/* Выводим уроки за день */}
                             {lessonsForTheDay.map((lesson, lessonIndex) => {
                                 // Трансформируем данные урока перед их использованием
+                                const roomInfo = getAddressAndRoom(lesson.aydit);
                                 return (
                                     <LessonCard
                                         key={lessonIndex}
@@ -681,10 +920,9 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                                         prop1={lesson.timefinish}
                                         prop2={extractLessonType(lesson.name, lesson.namegroup)}
                                         preMedi={processLessonName(lesson.name).lessonInfo}
-                                        teacherName={processLessonName(lesson.name).teacher}
+                                        teacherName={lesson.teacher !== "П " ? processLessonName(lesson.name).teacher ? processLessonName(lesson.name).teacher : "Преподаватель не указан" : "П "}
                                         prop3={
                                             (() => {
-                                                const roomInfo = getAddressAndRoom(lesson.aydit);
                                                 if (roomInfo.isRemote) {
                                                     return <Text>{roomInfo.address}</Text>;
                                                 } else {
@@ -711,6 +949,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                         </Text>
                     </View>
                 )}
+                
                 {Object.entries(groupedScheduleData).length > 0 && (
                     <View
                         onLayout={(event) => {
@@ -1034,6 +1273,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#0000ff',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 
