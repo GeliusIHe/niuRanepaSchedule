@@ -80,6 +80,87 @@ const SearchFocusedIcon = ({
   const [isShowingSelectedGroupSchedule, setIsShowingSelectedGroupSchedule] = useState(false);
   const [selectedGroupName, setSelectedGroupName] = useState("");
   const [selectedStars, setSelectedStars] = useState<SelectedStarsType>({});
+  const [groupsWithCache, setGroupsWithCache] = useState<{[id: number]: boolean}>({});
+  const [isServerReachable, setIsServerReachable] = useState(true);
+
+  // Function to clean up old search caches (keeping only the most recent)
+  const cleanUpOldSearchCaches = async () => {
+    try {
+      const MAX_CACHED_SEARCHES = 20;
+      const cachedSearches = await AsyncStorage.getItem('cachedSearchQueries') || '[]';
+      const searches = JSON.parse(cachedSearches);
+      
+      if (searches.length > MAX_CACHED_SEARCHES) {
+        // Keep only the most recent MAX_CACHED_SEARCHES
+        const searchesToRemove = searches.slice(0, searches.length - MAX_CACHED_SEARCHES);
+        const searchesToKeep = searches.slice(searches.length - MAX_CACHED_SEARCHES);
+        
+        // Remove the old caches
+        for (const query of searchesToRemove) {
+          const cacheKey = `searchCache_${query}`;
+          const timestampKey = `searchCacheTimestamp_${query}`;
+          await AsyncStorage.removeItem(cacheKey);
+          await AsyncStorage.removeItem(timestampKey);
+        }
+        
+        // Update the list of cached searches
+        await AsyncStorage.setItem('cachedSearchQueries', JSON.stringify(searchesToKeep));
+        console.log(`Cleaned up ${searchesToRemove.length} old search caches`);
+      }
+    } catch (error) {
+      console.error('Error cleaning up old search caches:', error);
+    }
+  };
+
+  // Function to get cache key for a group
+  function getCacheKey(groupIdentifier: string | null): string {
+    return `scheduleData_${groupIdentifier || ''}`;
+  }
+
+  // Function to check if a group has cached data
+  async function checkGroupCache(groupId: number, groupTitle: string): Promise<boolean> {
+    try {
+      const cacheKey = getCacheKey(groupTitle);
+      const cachedData = await AsyncStorage.getItem(cacheKey);
+      return cachedData !== null;
+    } catch (error) {
+      console.error('Error checking group cache:', error);
+      return false;
+    }
+  }
+
+  // Function to update cache status for all search results
+  async function updateCacheStatus(results: SearchResult[]) {
+    const cacheStatus: {[id: number]: boolean} = {};
+    
+    for (const result of results) {
+      // For groups, check if we have cached schedule data
+      if (result.Type === "Group") {
+        cacheStatus[result.id] = await checkGroupCache(result.id, result.Title);
+      } else {
+        // For non-groups (teachers, etc.), just mark as false
+        cacheStatus[result.id] = false;
+      }
+    }
+    
+    setGroupsWithCache(cacheStatus);
+    
+    // After checking status, also check if we have cached schedules
+    // This helps update UI indicators for offline availability
+    const cachedScheduleKeys = await getCachedScheduleKeys();
+    console.log(`Found ${cachedScheduleKeys.length} cached schedules`);
+  }
+  
+  // Function to get all cached schedule keys
+  async function getCachedScheduleKeys(): Promise<string[]> {
+    try {
+      const allKeys = await AsyncStorage.getAllKeys();
+      return allKeys.filter(key => key.startsWith('scheduleData_'));
+    } catch (error) {
+      console.error('Error getting cached schedule keys:', error);
+      return [];
+    }
+  }
 
   useEffect(() => {
     const loadSelectedItems = async () => {
@@ -148,56 +229,168 @@ const SearchFocusedIcon = ({
     id: number;
   }
 
-  const debouncedSearch = debounce((query: string) => {
-    // Сначала обращаемся к api.geliusihe
-    fetch(`https://api.geliusihe.ru/autocomplete?title=${encodeURIComponent(query)}`)
-        .then(response => {
-          if (!response.ok) {
-            throw new Error('Network response was not ok ' + response.statusText);
-          }
-          return response.json();
-        })
-        .then(suggestions => {
-          if (suggestions && suggestions.length > 0) {
-            // Если есть результаты от api.geliusihe, используем их и не выполняем запрос к services.niu.ranepa.ru
-            console.log(suggestions)
-            suggestions.sort(sortGroups);
-            setSearchResults(suggestions);
-            console.log(suggestions)
-          } else {
-            // Если нет результатов от api.geliusihe, выполняем запрос к services.niu.ranepa.ru
+  const debouncedSearch = debounce(async (query: string) => {
+    setIsLoading(true);
+    
+    // First, check if we have this query cached
+    try {
+      const searchCacheKey = `searchCache_${query.toLowerCase()}`;
+      const cachedResults = await AsyncStorage.getItem(searchCacheKey);
+      const cachedTimestampKey = `searchCacheTimestamp_${query.toLowerCase()}`;
+      const cachedTimestampStr = await AsyncStorage.getItem(cachedTimestampKey);
+      
+      if (cachedResults) {
+        // We have cached results, use them immediately
+        console.log("Using cached search results for:", query);
+        const parsedResults = JSON.parse(cachedResults);
+        setSearchResults(parsedResults);
+        updateCacheStatus(parsedResults);
+        setIsServerReachable(true);
+        setIsLoading(false);
+        
+        // Check if we need to refresh in the background (if cache is older than 1 hour)
+        const currentTime = Date.now();
+        const cachedTime = cachedTimestampStr ? parseInt(cachedTimestampStr, 10) : 0;
+        const cacheAge = currentTime - cachedTime;
+        const ONE_HOUR = 60 * 60 * 1000; // 1 hour in milliseconds
+        
+        if (cacheAge > ONE_HOUR) {
+          console.log("Cache is older than 1 hour, refreshing in background");
+          // After showing cached results, fetch fresh data in background
+          fetchFreshSearchResults(query, searchCacheKey);
+        } else {
+          console.log("Cache is recent, not refreshing from server");
+        }
+        return;
+      }
+    } catch (cacheError) {
+      console.error("Error checking search cache:", cacheError);
+      // Continue with normal fetch if cache check fails
+    }
+    
+    // If no cache or cache check failed, proceed with normal fetch
+    fetchFreshSearchResults(query);
+  }, 300);
+  
+  // Function to fetch fresh results from server
+  const fetchFreshSearchResults = (query: string, cacheKey?: string) => {
+    // Попытка обращения к api.etherveil.baby с обработкой ошибок
+    fetch(`https://api.etherveil.baby/autocomplete?title=${encodeURIComponent(query)}`)
+        .then(
+          response => {
+            if (!response.ok) {
+              throw new Error('Network response was not ok ' + response.statusText);
+            }
+            return response.json();
+          },
+          // Обработка ошибок сетевого запроса - переходим к запасному серверу
+          error => {
+            console.log("Error accessing api.etherveil.baby:", error.message);
+            // Сразу возвращаем запрос к ranepa серверу
             return fetch(`http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?name=${query}`);
           }
-        })
-        .then(response => {
-          if (response && response.ok) {
-            return response.json();
+        )
+        .then(responseOrData => {
+          // Проверяем, ответ ли это или уже данные
+          if (responseOrData && responseOrData.json && typeof responseOrData.json === 'function') {
+            // Это ответ от api.etherveil.baby
+            if (responseOrData.ok) {
+              return responseOrData.json();
+            } else {
+              // Если ответ не ок, выполняем запрос к ranepa
+              return fetch(`http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?name=${query}`)
+                .then(response => response.json());
+            }
+          } else {
+            // Это уже данные от api.etherveil.baby
+            return responseOrData;
           }
         })
         .then(data => {
-          // Добавляем проверку на наличие данных перед обращением к свойствам объекта
-          if (data) {
+          // Если данные с api.etherveil.baby - массив объектов со свойством Title
+          if (data && Array.isArray(data) && data.length > 0 && data[0].Title) {
+            console.log("Got results from api.etherveil.baby");
+            data.sort(sortGroups);
+            setSearchResults(data);
+            updateCacheStatus(data);
+            setIsServerReachable(true);
+            setIsLoading(false);
+            
+            // Cache the search results for future use
+            cacheSearchResults(query, data);
+          } 
+          // Если данные от ranepa (имеют структуру с GetNameUidForRaspResult)
+          else if (data && data.GetNameUidForRaspResult) {
+            console.log("Got results from NIU RANEPA server");
             const rawData = data.GetNameUidForRaspResult?.ItemRaspUID || [];
             const results = Array.isArray(rawData) ? rawData : [rawData];
             const groups = results.filter(result => result.Type === 'Group');
             groups.forEach(checkAndCacheGroup);
             setSearchResults(results);
+            updateCacheStatus(results);
+            setIsServerReachable(true);
+            setIsLoading(false);
+            
+            // Cache the search results for future use
+            cacheSearchResults(query, results);
+          } 
+          // Если данные отсутствуют или в неизвестном формате
+          else {
+            console.log("No results found or invalid data format");
+            setSearchResults([]);
+            setIsLoading(false);
+            setIsServerReachable(true);
           }
         })
         .catch(error => {
           console.error('There was a problem with the fetch operation:', error);
+          setIsServerReachable(false);
+          // When server is unreachable, show all groups with cached data
+          getAllCachedGroups(query);
+          setIsLoading(false);
         });
-  }, 300);
+  };
+  
+  // Function to cache search results
+  const cacheSearchResults = async (query: string, results: any[]) => {
+    try {
+      const searchCacheKey = `searchCache_${query.toLowerCase()}`;
+      await AsyncStorage.setItem(searchCacheKey, JSON.stringify(results));
+      console.log("Cached search results for:", query);
+      
+      // Store timestamp of when this cache was created
+      const timestampKey = `searchCacheTimestamp_${query.toLowerCase()}`;
+      await AsyncStorage.setItem(timestampKey, Date.now().toString());
+      
+      // Store this query in the list of cached searches
+      const cachedSearches = await AsyncStorage.getItem('cachedSearchQueries') || '[]';
+      const searches = JSON.parse(cachedSearches);
+      if (!searches.includes(query.toLowerCase())) {
+        searches.push(query.toLowerCase());
+        await AsyncStorage.setItem('cachedSearchQueries', JSON.stringify(searches));
+        
+        // Clean up old caches if we just added a new one
+        cleanUpOldSearchCaches();
+      }
+    } catch (error) {
+      console.error("Error caching search results:", error);
+    }
+  };
+
+  // Clean up old search caches when component mounts
+  useEffect(() => {
+    cleanUpOldSearchCaches();
+  }, []);
 
   function checkAndCacheGroup(group: { Title: string; id: number; }) {
     // Замените URL на адрес вашего сервера для проверки кэша
-    fetch(`https://api.geliusihe.ru/check-cache?title=${encodeURIComponent(group.Title)}`)
+    fetch(`https://api.etherveil.baby/check-cache?title=${encodeURIComponent(group.Title)}`)
         .then(response => response.json())
         .then(data => {
           // Проверяем, есть ли в кэше информация о группе
           if (!data.cached) {
             // Если группа не найдена в кэше, нужно её туда добавить
-            return fetch('https://api.geliusihe.ru/cache-group', {
+            return fetch('https://api.etherveil.baby/cache-group', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -323,6 +516,46 @@ const SearchFocusedIcon = ({
         });
   };
 
+  // Function to get and display all groups with cached data
+  async function getAllCachedGroups(searchQuery?: string) {
+    try {
+      // Get all AsyncStorage keys
+      const allKeys = await AsyncStorage.getAllKeys();
+      
+      // Filter keys that represent cached schedules
+      const scheduleKeys = allKeys.filter(key => key.startsWith('scheduleData_'));
+      
+      // Extract group names from the keys
+      const groupNames = scheduleKeys.map(key => key.replace('scheduleData_', ''));
+      
+      // Filter group names by search query if provided
+      const filteredGroupNames = searchQuery 
+        ? groupNames.filter(name => 
+            name.toLowerCase().includes(searchQuery.toLowerCase()))
+        : groupNames;
+      
+      // Create result objects for these groups
+      const cachedGroups: SearchResult[] = filteredGroupNames
+        .filter(name => name && name.trim() !== '')
+        .map((name, index) => ({
+          Title: name,
+          Type: 'Group',
+          id: -(index + 1) // Use negative IDs to indicate these are from cache only
+        }));
+      
+      if (cachedGroups.length > 0) {
+        setSearchResults(cachedGroups);
+        // Mark all as having cache
+        const cacheStatus: {[id: number]: boolean} = {};
+        cachedGroups.forEach(group => {
+          cacheStatus[group.id] = true;
+        });
+        setGroupsWithCache(cacheStatus);
+      }
+    } catch (error) {
+      console.error('Error retrieving cached groups:', error);
+    }
+  }
 
   return (
       <View style={styles.mainContainer}>
@@ -381,9 +614,15 @@ const SearchFocusedIcon = ({
                             <View style={{ flex: 1 }}>
                               <Text style={[styles.resultText, styles.boldText]}>
                                 {item.Title}
+                                {!isServerReachable && groupsWithCache[item.id] && (
+                                  <Text style={{ color: '#4CAF50', fontSize: 12 }}> (кэш)</Text>
+                                )}
                               </Text>
                               <Text style={styles.additionalText}>
                                 {item.Type === "Group" ? `СПО, ${extractCourseNumber(item.Title)} курс, очная форма` : "Информация о преподавателе"}
+                                {groupsWithCache[item.id] && (
+                                  <Text style={{ color: '#4CAF50' }}> (доступно оффлайн)</Text>
+                                )}
                               </Text>
                               {item.Type === "Group" && (
                                   <TouchableOpacity
@@ -474,6 +713,7 @@ const styles = StyleSheet.create({
     marginTop: 15,
   },
   boldText: {
+    fontWeight: 'bold',
   },
   groupContainer: {
     paddingLeft: 20,
@@ -489,6 +729,9 @@ const styles = StyleSheet.create({
   },
   inputLine: {
     marginTop: 15,
+    height: 1,
+    backgroundColor: '#E0E0E0',
+    marginHorizontal: 15,
   },
   content: {
     flex: 1,

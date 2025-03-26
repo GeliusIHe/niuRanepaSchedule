@@ -27,7 +27,10 @@ const LessonCard = ({
                     }: LessonCardType) => {
   // Функция для определения дополнительного стиля
   const getAdditionalStyle = () => {
-    if (preMedi && subjectName && preMedi.includes(subjectName)) {
+    if (
+      (preMedi && subjectName && preMedi.toLowerCase().includes(subjectName.toLowerCase())) || 
+      (teacherName && subjectName && teacherName.toLowerCase().includes(subjectName.toLowerCase()))
+    ) {
       return {
         borderLeftWidth: 10,
         borderLeftColor: 'blue',

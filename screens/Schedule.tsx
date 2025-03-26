@@ -95,6 +95,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     const [scheduleData, setScheduleData] = React.useState<ScheduleItem[]>([]);
     const [data, setData] = useState<string | null>(null);
     const [isLoading, setIsLoading] = React.useState(true);
+    const [isRefreshing, setIsRefreshing] = React.useState(false);
     const groupedScheduleData = groupByDate(scheduleData);
     const [modalVisible, setModalVisible] = useState(false);
     const [subjectName, setSubjectName] = useState('');
@@ -105,6 +106,10 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     const inputRef = useRef<TextInput>(null); // указываем TextInput как тип ссылки
     const navigation = useNavigation();
     const [searchQuery, setSearchQuery] = useState(''); // для хранения запроса пользователя
+
+    // Track whether we have other cached schedules
+    const [hasOtherCachedSchedules, setHasOtherCachedSchedules] = useState(false);
+    const [errorMessage, setErrorMessage] = useState("Не удалось извлечь новые данные с сервера");
 
     function formatHumanReadableDate(dateString: string): string {
         const date = parseDate(dateString);
@@ -133,6 +138,12 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
 
         return date;
     }
+
+    // Utility function for generating consistent cache keys
+    function getCacheKey(groupIdentifier: string | null): string {
+        return `scheduleData_${groupIdentifier || ''}`;
+    }
+
     type Lesson = {
         date: string;
         timestart: string;
@@ -198,26 +209,63 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
             }
 
             clearTimeout(timeoutId);
-
+            
             let newData = await response.json();
-            console.log(newData)
+            
+            if (!newData) {
+                throw new Error(`Invalid response data`);
+            }
+            
             const resultKey = isGroup(actualGroupName) ? 'GetRaspGroupResult' : 'GetRaspPrepResult';
+            
             if (newData[resultKey] && newData[resultKey].RaspItem) {
                 const flatNewData = [].concat(...newData[resultKey].RaspItem);
                 const filteredScheduleData = filterPhysicalEducationLessons(flatNewData);
-                setScheduleData(prevData => [...prevData, ...filterScheduleBySubject(subjectName, filteredScheduleData)]);
+                
+                // Update the state with the combined data
+                setScheduleData(prevData => {
+                    const combinedData = [...prevData, ...filterScheduleBySubject(subjectName, filteredScheduleData)];
+                    
+                    // Update the cache with the combined data
+                    try {
+                        const cacheKey = getCacheKey(actualGroupName);
+                        AsyncStorage.setItem(cacheKey, JSON.stringify(combinedData))
+                            .catch(error => console.error('Error updating cache with combined data:', error));
+                    } catch (error) {
+                        console.error('Error preparing cache update:', error);
+                    }
+                    
+                    return combinedData;
+                });
+                
+                setTimeout(() => {
+                    if (scrollViewRef.current && scrollViewRef.current.scrollTo) {
+                        scrollViewRef.current.scrollTo({ x: 0, y: loadMoreButtonPosition, animated: true });
+                    }
+                }, 100);
             } else {
-                console.error(`Unexpected data structure`);
+                console.error(`Unexpected data structure in loadMoreData response`);
             }
-            setTimeout(() => {
-                if (scrollViewRef.current && scrollViewRef.current.scrollTo) {
-                    scrollViewRef.current.scrollTo({ x: 0, y: loadMoreButtonPosition, animated: true });
-                }
-            }, 100);
         } catch (error) {
             console.error('Error fetching more schedule:', error);
-            setShowNotification(true);
-            clearTimeout(timeoutId);
+            // Try fallback to what we already have in cache
+            const actualGroupName = groupName || await AsyncStorage.getItem('@group_name') || null;
+            if (actualGroupName) {
+                const hasCachedData = await hasCachedSchedule(actualGroupName);
+                if (hasCachedData) {
+                    // We already have data from cache, just show what we have
+                    clearTimeout(timeoutId);
+                    console.log(`Using cached data for ${actualGroupName} due to fetch error`);
+                } else {
+                    const cachedSchedules = await getCachedScheduleKeys();
+                    if (cachedSchedules.length > 0) {
+                        console.log('No cache for this group, but other groups have cached data');
+                    }
+                    setShowNotification(true);
+                }
+            } else {
+                setShowNotification(true);
+            }
         } finally {
             setIsFetchingMore(false);
         }
@@ -280,7 +328,8 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
         async function loadCachedData() {
             try {
                 if (!groupName) {
-                    const cachedData = await AsyncStorage.getItem('scheduleData');
+                    const cacheKey = getCacheKey(actualGroupId);
+                    const cachedData = await AsyncStorage.getItem(cacheKey);
                     if (cachedData) {
                         setIsLoading(false);
                         setScheduleData(JSON.parse(cachedData));
@@ -294,7 +343,32 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
 
     }, [actualGroupId]);
 
-// Кастомный хук для отслеживания изменений в AsyncStorage
+    // Function to get all cached schedule keys
+    async function getCachedScheduleKeys(): Promise<string[]> {
+        try {
+            const allKeys = await AsyncStorage.getAllKeys();
+            return allKeys.filter(key => key.startsWith('scheduleData_'));
+        } catch (error) {
+            console.error('Error getting cached schedule keys:', error);
+            return [];
+        }
+    }
+
+    // Function to check if a specific group has cached data
+    async function hasCachedSchedule(groupIdentifier: string | null | undefined): Promise<boolean> {
+        try {
+            if (groupIdentifier === undefined) return false;
+            
+            const cacheKey = getCacheKey(groupIdentifier);
+            const cachedData = await AsyncStorage.getItem(cacheKey);
+            return cachedData !== null;
+        } catch (error) {
+            console.error('Error checking cached schedule:', error);
+            return false;
+        }
+    }
+
+    // Update the fallback logic in fetchData for better handling when server is unreachable
     useEffect(() => {
         let isInitialLoad = true;
 
@@ -304,7 +378,7 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                     const value = await AsyncStorage.getItem('@group_name');
                     if (value == null && isInitialLoad) {
                         isInitialLoad = false;
-                        navigation.navigate('StartScreen');
+                        navigation.navigate('StartScreen' as never);
                     }
                     return value || null;
                 } catch (e) {
@@ -329,6 +403,32 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                 const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${startDate}&dfinish=${endDate}`;
 
                 try {
+                    // First check if we have cached data for this group
+                    const cacheKey = getCacheKey(actualGroupName);
+                    const cachedData = await AsyncStorage.getItem(cacheKey);
+                    let loadedFromCache = false;
+                    
+                    // If we have cached data, use it immediately to show something to the user
+                    if (cachedData) {
+                        try {
+                            const data = JSON.parse(cachedData);
+                            const filteredScheduleData = filterPhysicalEducationLessons(data);
+                            setScheduleData(filterScheduleBySubject('', filteredScheduleData));
+                            console.log(`Loaded initial schedule for ${actualGroupName} from cache`);
+                            loadedFromCache = true;
+                            
+                            // Set loading to false since we've loaded cache data
+                            setIsLoading(false);
+                            
+                            // But mark as refreshing to indicate we're getting fresh data
+                            setIsRefreshing(true);
+                        } catch (cacheParseError) {
+                            console.error("Error parsing cached data:", cacheParseError);
+                            // Continue with network request if cache parsing fails
+                        }
+                    }
+                    
+                    // Still make the network request to get the latest data
                     const response = await fetch(url);
                     if (!response.ok) {
                         throw new Error(`HTTP error! Status: ${response.status}`);
@@ -342,7 +442,9 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                         console.log(filteredScheduleData)
                         setScheduleData(filterScheduleBySubject('', filteredScheduleData));
                         try {
-                            await AsyncStorage.setItem('scheduleData', JSON.stringify(data[resultKey].RaspItem));
+                            // Cache using group-specific key
+                            const cacheKey = getCacheKey(actualGroupName);
+                            await AsyncStorage.setItem(cacheKey, JSON.stringify(data[resultKey].RaspItem));
                         } catch (error) {
                             console.error('Error caching schedule data:', error);
                         }
@@ -351,12 +453,42 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                     }
                 } catch (error) {
                     console.error("An error occurred while fetching data:", error);
-                    // Устанавливаем таймер на 5 секунд перед установкой showNotification в true
-                    setTimeout(() => {
-                        setShowNotification(true);
-                    }, 5000);
+                    // Try to load from cache if server is unreachable
+                    try {
+                        const cacheKey = getCacheKey(actualGroupName);
+                        const cachedData = await AsyncStorage.getItem(cacheKey);
+                        if (cachedData) {
+                            const data = JSON.parse(cachedData);
+                            const filteredScheduleData = filterPhysicalEducationLessons(data);
+                            setScheduleData(filterScheduleBySubject('', filteredScheduleData));
+                            console.log(`Loaded schedule for ${actualGroupName} from cache`);
+                        } else {
+                            // No cache available for this specific group
+                            // Check if we have ANY cached schedules
+                            const cachedKeys = await getCachedScheduleKeys();
+                            if (cachedKeys.length > 0) {
+                                console.log(`No cache for ${actualGroupName}, but found cached data for other groups.`);
+                                // We have other cached schedules, but not for this group
+                                // Show notification that THIS group's schedule is unavailable, but others may be available
+                                setTimeout(() => {
+                                    setShowNotification(true);
+                                }, 5000);
+                            } else {
+                                // No cache available at all
+                                setTimeout(() => {
+                                    setShowNotification(true);
+                                }, 5000);
+                            }
+                        }
+                    } catch (cacheError) {
+                        console.error("Error retrieving from cache:", cacheError);
+                        setTimeout(() => {
+                            setShowNotification(true);
+                        }, 5000);
+                    }
                 } finally {
                     setIsLoading(false);
+                    setIsRefreshing(false);
                 }
             }
         }
@@ -371,6 +503,34 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
         };
     }, [actualGroupId, groupNameContext]);
 
+    // Check for cached schedules on mount
+    useEffect(() => {
+        async function checkCachedSchedules() {
+            const cachedKeys = await getCachedScheduleKeys();
+            setHasOtherCachedSchedules(cachedKeys.length > 0);
+        }
+        
+        checkCachedSchedules();
+    }, []);
+
+    // Update error notification when showing
+    useEffect(() => {
+        if (showNotification) {
+            const checkAndUpdateError = async () => {
+                const cachedKeys = await getCachedScheduleKeys();
+                const currentGroupHasCache = await hasCachedSchedule(actualGroupId || groupName);
+                
+                if (!currentGroupHasCache && cachedKeys.length > 0) {
+                    setErrorMessage("Нет данных для этой группы. Попробуйте другую группу - для некоторых групп могут быть доступны кэшированные данные.");
+                    setHasOtherCachedSchedules(true);
+                } else {
+                    setErrorMessage("Не удалось извлечь новые данные с сервера");
+                }
+            };
+            
+            checkAndUpdateError();
+        }
+    }, [showNotification, actualGroupId, groupName]);
 
     if (isLoading) {
         return (
@@ -444,6 +604,14 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
 
     return (
         <View style={styles.schedule}>
+            {/* Refreshing indicator */}
+            {isRefreshing && (
+                <View style={styles.refreshingContainer}>
+                    <ActivityIndicator size="small" color="#0000ff" />
+                    <Text style={styles.refreshingText}>Обновление данных...</Text>
+                </View>
+            )}
+            
             <View style={[styles.headertitleicon, styles.headerTitleIconStyle]}>
                 <View style={[styles.leftAccessory, styles.accessoryFlexBox]}>
                     <Image
@@ -481,8 +649,13 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
                 }}        >
                 <>
                     {showNotification && (
-                        <View style={{ backgroundColor: 'red', padding: 5, alignItems: 'center' }}>
-                            <Text style={{ color: 'white' }}>Не удалось извлечь новые данные с сервера</Text>
+                        <View style={{ backgroundColor: 'red', padding: 10, alignItems: 'center' }}>
+                            <Text style={{ color: 'white', textAlign: 'center' }}>{errorMessage}</Text>
+                            {hasOtherCachedSchedules && (
+                                <Text style={{ color: 'white', fontSize: 12, marginTop: 5, textAlign: 'center' }}>
+                                    Используйте поиск для доступа к другим группам с кэшированными данными
+                                </Text>
+                            )}
                         </View>
                     )}
                 </>
@@ -845,6 +1018,22 @@ const styles = StyleSheet.create({
     flex: 1,
     width: "100%",
     height: 812,
+  },
+  refreshingContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+  },
+  refreshingText: {
+    marginTop: 10,
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0000ff',
   },
 });
 
