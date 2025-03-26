@@ -1,14 +1,13 @@
 import * as React from "react";
 import {useEffect, useRef, useState} from "react";
 import {
-  ActivityIndicator,
-  Linking,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from "react-native";
 import TableSubheadings from "../components/TableSubheadings";
 import LessonCard from "../components/LessonCard";
@@ -19,123 +18,15 @@ import {useGroupId} from "../components/GroupIdContext";
 import {useGroup} from "../components/GroupContext";
 import Modal from "react-native-modal";
 import {Image} from "expo-image";
-import axios from "axios";
 import {useNavigation} from "@react-navigation/core";
 
 type ScheduleItem = {
-  date: string;
-  timestart: string;
-  namegroup?: string;
-  timefinish: string;
-  name: string;
-  aydit: string;
-
-  kf: string;
-  nf: string;
-  number: string;
-  subject: string;
-  teacher: string;
-  type: string;
-  xdt: string;
-};
-
-function groupByDate(lessons: ScheduleItem[]) {
-  return lessons.reduce<{ [key: string]: ScheduleItem[] }>((acc, lesson) => {
-    // Используем lesson.date, если дата содержится в этом поле
-    (acc[lesson.date] = acc[lesson.date] || []).push(lesson);
-    return acc;
-  }, {});
-}
-
-function getAddressAndRoom(room: string): { address: JSX.Element; roomNumber: string } {
-  if (room.startsWith('П8-')) {
-    return {
-      address: <Text>
-        Пушкина <Text style={{fontWeight: 'bold'}}>8</Text>
-      </Text>,
-      roomNumber: room.replace('П8-', ''),
-    };
-  } else if (room.startsWith('СО')) {
-    return {
-      address: <Text>
-        Пушкина <Text style={{fontWeight: 'bold'}}>10</Text>
-      </Text>,
-      roomNumber: room.replace('СО ', ''),
-    };
-  } else {
-    return {
-      address: <Text>Не распознано</Text>,
-      roomNumber: room,
-    };
-  }
-}
-
-interface ScheduleProps {
-  groupIdProp: string | null;
-  groupName?: string;
-}
-const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
-  const { groupId: groupIdFromHook } = useGroupId();
-
-  const actualGroupId = groupIdProp !== null ? groupIdProp : groupIdFromHook;
-  const [loadMoreButtonPosition, setLoadMoreButtonPosition] = useState(0);
-  const [showNotification, setShowNotification] = useState(false);
-
-  const scrollViewRef = React.useRef<ScrollView>(null);
-  const [isFetchingMore, setIsFetchingMore] = React.useState(false);
-  const [endDate, setEndDate] = React.useState(addDays(new Date(), 7));
-  const intervalIdRef = useRef<number | null>(null);
-  const [scheduleData, setScheduleData] = React.useState<ScheduleItem[]>([]);
-  const [data, setData] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const groupedScheduleData = groupByDate(scheduleData);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [subjectName, setSubjectName] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [suggestion, setSuggestion] = useState<string>('');
-  const [stableSchedule, setStableSchedule] = useState<ScheduleItem[]>([]);
-  const [error, setError] = useState(null);
-  const inputRef = useRef<TextInput>(null); // указываем TextInput как тип ссылки
-  const [showUpdate, setShowUpdate] = useState(false);
-  const [subjectNames, setSubjectNames] = useState<string[]>([]);
-  const [updateUrl, setUpdateUrl] = useState('');
-  const navigation = useNavigation();
-  const [searchQuery, setSearchQuery] = useState(''); // для хранения запроса пользователя
-
-  function formatHumanReadableDate(dateString: string): string {
-    const date = parseDate(dateString);
-
-    if (!date || isNaN(date.getTime())) return "Invalid Date"; // Проверка на корректность даты и на null
-
-    const daysOfWeek = ["ВОСКРЕСЕНЬЕ", "ПОНЕДЕЛЬНИК", "ВТОРНИК", "СРЕДА", "ЧЕТВЕРГ", "ПЯТНИЦА", "СУББОТА"];
-    const months = ["ЯНВАРЯ", "ФЕВРАЛЯ", "МАРТА", "АПРЕЛЯ", "МАЯ", "ИЮНЯ", "ИЮЛЯ", "АВГУСТА", "СЕНТЯБРЯ", "ОКТЯБРЯ", "НОЯБРЯ", "ДЕКАБРЯ"];
-
-    const dayOfWeek = daysOfWeek[date.getDay()];
-    const day = date.getDate();
-    const month = months[date.getMonth()];
-
-    return `${dayOfWeek}, ${day} ${month}`;
-  }
-
-
-  function parseDate(dateString: string) {
-    // Заменяем точки на дефисы и создаем новый объект Date
-    const date = new Date(dateString.split('.').reverse().join('-'));
-
-    if (isNaN(date.getTime())) {
-      console.error(`Invalid date: ${dateString}`);
-      return null;
-    }
-
-    return date;
-  }
-  type Lesson = {
     date: string;
     timestart: string;
+    namegroup?: string;
     timefinish: string;
     name: string;
     aydit: string;
-
     kf: string;
     nf: string;
     number: string;
@@ -143,528 +34,591 @@ const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
     teacher: string;
     type: string;
     xdt: string;
-  };
+};
 
-  function filterScheduleBySubject(subject: string, schedule: Lesson[]): Lesson[] {
-    // Сначала найдем все уникальные даты, когда есть урок по выбранному предмету
-    const subjectDates = schedule
-        .filter(lesson => lesson.name.includes(subject))
-        .map(lesson => lesson.date);
+function groupByDate(lessons: ScheduleItem[]) {
+    return lessons.reduce<{ [key: string]: ScheduleItem[] }>((acc, lesson) => {
+        // Используем lesson.date, если дата содержится в этом поле
+        (acc[lesson.date] = acc[lesson.date] || []).push(lesson);
+        return acc;
+    }, {});
+}
 
-    // Теперь вернем все уроки, которые проводятся в эти даты
-    return schedule.filter(lesson => subjectDates.includes(lesson.date));
-  }
-
-  function filterPhysicalEducationLessons(scheduleData: any[]) {
-    let isPhysicalEducationFound = false;
-
-    return scheduleData.filter((lesson) => {
-      if (lesson.name.includes("Физическая культура")) {
-        if (isPhysicalEducationFound) {
-          return false;
-        }
-        isPhysicalEducationFound = true;
-      }
-      return true;
-    });
-  }
-
-
-  async function loadMoreData() {
-    setIsFetchingMore(true);
-
-    const timeoutId = setTimeout(() => {
-      setShowNotification(true);
-    }, 5000);
-
-    try {
-      const value = await AsyncStorage.getItem('@group_name');
-      const daysMarginString = await AsyncStorage.getItem('@daysMargin');
-      const daysMargin = daysMarginString ? parseInt(daysMarginString, 10) - 2 : 13;
-      const actualGroupName = groupName || value || null;
-      const startDateForNextFetch = addDays(endDate, 2);
-      const newEndDate = addDays(startDateForNextFetch, daysMargin);
-      setEndDate(newEndDate);
-      const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${formatDate(startDateForNextFetch)}&dfinish=${formatDate(newEndDate)}`;
-
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
-
-      clearTimeout(timeoutId);
-
-      let newData = await response.json();
-      console.log(newData)
-      const resultKey = isGroup(actualGroupName) ? 'GetRaspGroupResult' : 'GetRaspPrepResult';
-      if (newData[resultKey] && newData[resultKey].RaspItem) {
-        const flatNewData = [].concat(...newData[resultKey].RaspItem);
-        const filteredScheduleData = filterPhysicalEducationLessons(flatNewData);
-        setScheduleData(prevData => [...prevData, ...filterScheduleBySubject(subjectName, filteredScheduleData)]);
-      } else {
-        console.error(`Unexpected data structure`);
-      }
-      setTimeout(() => {
-        if (scrollViewRef.current && scrollViewRef.current.scrollTo) {
-          scrollViewRef.current.scrollTo({ x: 0, y: loadMoreButtonPosition, animated: true });
-        }
-      }, 100);
-    } catch (error) {
-      console.error('Error fetching more schedule:', error);
-      setShowNotification(true);
-      clearTimeout(timeoutId);
-    } finally {
-      setIsFetchingMore(false);
+function getAddressAndRoom(room: string): { address: JSX.Element; roomNumber: string; isRemote: boolean } {
+    // Проверка на дистанционное обучение (СДО)
+    if (room === 'СДО' || room === 'сдо') {
+        return {
+            address: <Text>Дистант</Text>,
+            roomNumber: '',
+            isRemote: true
+        };
+    } else if (room.startsWith('П8-')) {
+        return {
+            address: <Text>
+                Пушкина <Text style={{fontWeight: 'bold'}}>8</Text>
+            </Text>,
+            roomNumber: room.replace('П8-', ''),
+            isRemote: false
+        };
+    } else if (room.startsWith('СО')) {
+        return {
+            address: <Text>
+                Пушкина <Text style={{fontWeight: 'bold'}}>10</Text>
+            </Text>,
+            roomNumber: room.replace('СО ', ''),
+            isRemote: false
+        };
+    } else {
+        return {
+            address: <Text>Не распознано</Text>,
+            roomNumber: room,
+            isRemote: false
+        };
     }
-  }
+}
 
-  const findSuggestion = (input: any) => {
-    const matchedSubject = subjectNames.find(name => name.toLowerCase().startsWith(input.toLowerCase()));
-    return matchedSubject || '';
-  };
+interface ScheduleProps {
+    groupIdProp: string | null;
+    groupName?: string;
+}
+const Schedule: React.FC<ScheduleProps> = ({ groupIdProp, groupName }) => {
+    const { groupId: groupIdFromHook } = useGroupId();
 
-  useEffect(() => {
-    if (subjectName) {
-      setSuggestion(findSuggestion(subjectName));
+    const actualGroupId = groupIdProp !== null ? groupIdProp : groupIdFromHook;
+    const [loadMoreButtonPosition, setLoadMoreButtonPosition] = useState(0);
+    const [showNotification, setShowNotification] = useState(false);
+
+    const scrollViewRef = React.useRef<ScrollView>(null);
+    const [isFetchingMore, setIsFetchingMore] = React.useState(false);
+    const [endDate, setEndDate] = React.useState(addDays(new Date(), 7));
+    const intervalIdRef = useRef<number | null>(null);
+    const [scheduleData, setScheduleData] = React.useState<ScheduleItem[]>([]);
+    const [data, setData] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = React.useState(true);
+    const groupedScheduleData = groupByDate(scheduleData);
+    const [modalVisible, setModalVisible] = useState(false);
+    const [subjectName, setSubjectName] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [suggestion, setSuggestion] = useState<string>('');
+    const [stableSchedule, setStableSchedule] = useState<ScheduleItem[]>([]);
+    const [error, setError] = useState(null);
+    const inputRef = useRef<TextInput>(null); // указываем TextInput как тип ссылки
+    const navigation = useNavigation();
+    const [searchQuery, setSearchQuery] = useState(''); // для хранения запроса пользователя
+
+    function formatHumanReadableDate(dateString: string): string {
+        const date = parseDate(dateString);
+
+        if (!date || isNaN(date.getTime())) return "Invalid Date"; // Проверка на корректность даты и на null
+
+        const daysOfWeek = ["ВОСКРЕСЕНЬЕ", "ПОНЕДЕЛЬНИК", "ВТОРНИК", "СРЕДА", "ЧЕТВЕРГ", "ПЯТНИЦА", "СУББОТА"];
+        const months = ["ЯНВАРЯ", "ФЕВРАЛЯ", "МАРТА", "АПРЕЛЯ", "МАЯ", "ИЮНЯ", "ИЮЛЯ", "АВГУСТА", "СЕНТЯБРЯ", "ОКТЯБРЯ", "НОЯБРЯ", "ДЕКАБРЯ"];
+
+        const dayOfWeek = daysOfWeek[date.getDay()];
+        const day = date.getDate();
+        const month = months[date.getMonth()];
+
+        return `${dayOfWeek}, ${day} ${month}`;
     }
-  }, [subjectName, subjectNames]);
 
-  useEffect(() => {
-    console.log(`Stable schedule changing. : ${stableSchedule}`)
-    const uniqueNames = [...new Set(stableSchedule.map(item => {
-      return item.name.split('(')[0].trim();
-    }))];
-    setSubjectNames(uniqueNames);
-  }, [stableSchedule]); // Обновляем subjectNames при изменении stableSchedule
 
-  useEffect(() => {
-    if (stableSchedule.length > 0) {
-      setScheduleData(filterScheduleBySubject(subjectName, stableSchedule));
-      console.log(subjectName, stableSchedule);
-      setModalVisible(false);
+    function parseDate(dateString: string) {
+        // Заменяем точки на дефисы и создаем новый объект Date
+        const date = new Date(dateString.split('.').reverse().join('-'));
+
+        if (isNaN(date.getTime())) {
+            console.error(`Invalid date: ${dateString}`);
+            return null;
+        }
+
+        return date;
     }
-  }, [stableSchedule]); // Этот useEffect будет вызван, когда stableSchedule обновится
+    type Lesson = {
+        date: string;
+        timestart: string;
+        timefinish: string;
+        name: string;
+        aydit: string;
 
-  useEffect(() => {
-
-    const checkServerConnection = async () => {
-      let attempts = parseInt(await AsyncStorage.getItem('failedAttempts') as string) || 0;
-
-      try {
-        const appVersion = 'release-1.2.1-011924';
-        const response = await axios.get(`https://api.geliusihe.ru/getData/${appVersion}`, { timeout: 3000 });
-
-        if (response.data.access === 0) {
-          // @ts-ignore
-          navigation.navigate('VersionError');
-        } else {
-          await AsyncStorage.setItem('failedAttempts', '0');
-        }
-      } catch (error) {
-        attempts += 1;
-        await AsyncStorage.setItem('failedAttempts', attempts.toString());
-
-        if (attempts >= 3) {
-          // @ts-ignore
-          navigation.navigate('VersionError');
-        }
-      }
-    }
-    checkServerConnection()
-
-    const checkForUpdates = async () => {
-      const appVersion = 'release-1.2.0-011924';
-      try {
-        const response = await axios.get(`https://api.geliusihe.ru/getData/${appVersion}`);
-        if (response.data.latest === 0) {
-          const latestResponse = await axios.get('https://api.geliusihe.ru/latest');
-          console.log(latestResponse.data); // Вывод ответа от /latest
-          setUpdateUrl(latestResponse.data)
-          setShowUpdate(true);
-        }
-      } catch (error) {
-        console.error('Ошибка при запросе к серверу:', error);
-      }
+        kf: string;
+        nf: string;
+        number: string;
+        subject: string;
+        teacher: string;
+        type: string;
+        xdt: string;
     };
 
-    checkForUpdates();
-  }, []);
+    function filterScheduleBySubject(subject: string, schedule: Lesson[]): Lesson[] {
+        // Сначала найдем все уникальные даты, когда есть урок по выбранному предмету
+        const subjectDates = schedule
+            .filter(lesson => lesson.name.includes(subject))
+            .map(lesson => lesson.date);
 
-
-  useEffect(() => {
-    if (modalVisible) {
-      const timer = setTimeout(() => {
-        if (inputRef.current) {
-          inputRef.current.focus();
-        }
-      }, 150);
-
-      return () => clearTimeout(timer);
+        // Теперь вернем все уроки, которые проводятся в эти даты
+        return schedule.filter(lesson => subjectDates.includes(lesson.date));
     }
-  }, [modalVisible]);
 
-  const formatDate = (date: Date): string => {
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    return `${day}.${month}.${year}`;
-  };
-  function addDays(date: Date, days: number): Date {
-    const result = new Date(date);
-    result.setDate(result.getDate() + days);
-    return result;
-  }
-  const { groupNameContext, setGroupNameContext } = useGroup();
-  useEffect(() => {
-    async function loadCachedData() {
-      try {
-        if (!groupName) {
-          const cachedData = await AsyncStorage.getItem('scheduleData');
-          if (cachedData) {
-            setIsLoading(false);
-            setScheduleData(JSON.parse(cachedData));
-          }
-        }
-      } catch (error) {
-        console.error('Error loading cached schedule:', error);
-      }
-    }
-    loadCachedData();
+    function filterPhysicalEducationLessons(scheduleData: any[]) {
+        let isPhysicalEducationFound = false;
 
-  }, [actualGroupId]);
-  
-// Кастомный хук для отслеживания изменений в AsyncStorage
-  useEffect(() => {
-    let isInitialLoad = true;
-
-    const fetchData = async () => {
-      const getData = async () => {
-        try {
-          const value = await AsyncStorage.getItem('@group_name');
-          if (value == null && isInitialLoad) {
-            isInitialLoad = false;
-            navigation.navigate('StartScreen');
-          }
-          return value || null;
-        } catch (e) {
-          console.error('Error reading data', e);
-          return null;
-        }
-      };
-
-      const actualGroupName = groupName || await getData();
-
-      if (actualGroupName !== null) {
-        if (intervalIdRef.current !== null) {
-          clearInterval(intervalIdRef.current);
-          intervalIdRef.current = null; // Сбрасываем значение ref
-        }
-        console.log(`Загружено расписание ${actualGroupName}`);
-        setData((actualGroupName || "").split(" ")[0] || null);
-        const daysMarginString = await AsyncStorage.getItem('@daysMargin');
-        const daysMargin = daysMarginString ? parseInt(daysMarginString, 10) : 7;
-        const startDate = formatDate(new Date());
-        const endDate = formatDate(addDays(new Date(), daysMargin));
-        const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${startDate}&dfinish=${endDate}`;
-
-        try {
-          const response = await fetch(url);
-          if (!response.ok) {
-            throw new Error(`HTTP error! Status: ${response.status}`);
-          }
-
-          let data = await response.json();
-          const resultKey = isGroup(actualGroupName) ? 'GetRaspGroupResult' : 'GetRaspPrepResult';
-
-          if (data[resultKey] && data[resultKey].RaspItem) {
-            const filteredScheduleData = filterPhysicalEducationLessons(data[resultKey].RaspItem);
-            console.log(filteredScheduleData)
-            setScheduleData(filterScheduleBySubject('', filteredScheduleData));
-            try {
-              await AsyncStorage.setItem('scheduleData', JSON.stringify(data[resultKey].RaspItem));
-            } catch (error) {
-              console.error('Error caching schedule data:', error);
+        return scheduleData.filter((lesson) => {
+            if (lesson.name.includes("Физическая культура")) {
+                if (isPhysicalEducationFound) {
+                    return false;
+                }
+                isPhysicalEducationFound = true;
             }
-          } else {
-            console.error("Unexpected data structure");
-          }
-        } catch (error) {
-          console.error("An error occurred while fetching data:", error);
-          // Устанавливаем таймер на 5 секунд перед установкой showNotification в true
-          setTimeout(() => {
-            setShowNotification(true);
-          }, 5000);
-        } finally {
-          setIsLoading(false);
-        }
-      }
+            return true;
+        });
     }
-    intervalIdRef.current = setInterval(fetchData, 2500) as unknown as number;
 
-    fetchData(); 
 
-    return () => {
-      if (intervalIdRef.current !== null) {
-        clearInterval(intervalIdRef.current);
-      }
+    async function loadMoreData() {
+        setIsFetchingMore(true);
+
+        const timeoutId = setTimeout(() => {
+            setShowNotification(true);
+        }, 5000);
+
+        try {
+            const value = await AsyncStorage.getItem('@group_name');
+            const daysMarginString = await AsyncStorage.getItem('@daysMargin');
+            const daysMargin = daysMarginString ? parseInt(daysMarginString, 10) - 2 : 13;
+            const actualGroupName = groupName || value || null;
+            const startDateForNextFetch = addDays(endDate, 2);
+            const newEndDate = addDays(startDateForNextFetch, daysMargin);
+            setEndDate(newEndDate);
+            const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${formatDate(startDateForNextFetch)}&dfinish=${formatDate(newEndDate)}`;
+
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+
+            clearTimeout(timeoutId);
+
+            let newData = await response.json();
+            console.log(newData)
+            const resultKey = isGroup(actualGroupName) ? 'GetRaspGroupResult' : 'GetRaspPrepResult';
+            if (newData[resultKey] && newData[resultKey].RaspItem) {
+                const flatNewData = [].concat(...newData[resultKey].RaspItem);
+                const filteredScheduleData = filterPhysicalEducationLessons(flatNewData);
+                setScheduleData(prevData => [...prevData, ...filterScheduleBySubject(subjectName, filteredScheduleData)]);
+            } else {
+                console.error(`Unexpected data structure`);
+            }
+            setTimeout(() => {
+                if (scrollViewRef.current && scrollViewRef.current.scrollTo) {
+                    scrollViewRef.current.scrollTo({ x: 0, y: loadMoreButtonPosition, animated: true });
+                }
+            }, 100);
+        } catch (error) {
+            console.error('Error fetching more schedule:', error);
+            setShowNotification(true);
+            clearTimeout(timeoutId);
+        } finally {
+            setIsFetchingMore(false);
+        }
+    }
+
+    const findSuggestion = (input: any) => {
+        const matchedSubject = subjectNames.find(name => name.toLowerCase().startsWith(input.toLowerCase()));
+        return matchedSubject || '';
     };
-  }, [actualGroupId, groupNameContext]); 
+
+    const [subjectNames, setSubjectNames] = useState<string[]>([]);
+
+    useEffect(() => {
+        if (subjectName) {
+            setSuggestion(findSuggestion(subjectName));
+        }
+    }, [subjectName, subjectNames]);
+
+    useEffect(() => {
+        console.log(`Stable schedule changing. : ${stableSchedule}`)
+        const uniqueNames = [...new Set(stableSchedule.map(item => {
+            return item.name.split('(')[0].trim();
+        }))];
+        setSubjectNames(uniqueNames);
+    }, [stableSchedule]); // Обновляем subjectNames при изменении stableSchedule
+
+    useEffect(() => {
+        if (stableSchedule.length > 0) {
+            setScheduleData(filterScheduleBySubject(subjectName, stableSchedule));
+            console.log(subjectName, stableSchedule);
+            setModalVisible(false);
+        }
+    }, [stableSchedule]); // Этот useEffect будет вызван, когда stableSchedule обновится
+
+    useEffect(() => {
+        if (modalVisible) {
+            const timer = setTimeout(() => {
+                if (inputRef.current) {
+                    inputRef.current.focus();
+                }
+            }, 150);
+
+            return () => clearTimeout(timer);
+        }
+    }, [modalVisible]);
+
+    const formatDate = (date: Date): string => {
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}.${month}.${year}`;
+    };
+    function addDays(date: Date, days: number): Date {
+        const result = new Date(date);
+        result.setDate(result.getDate() + days);
+        return result;
+    }
+    const { groupNameContext, setGroupNameContext } = useGroup();
+    useEffect(() => {
+        async function loadCachedData() {
+            try {
+                if (!groupName) {
+                    const cachedData = await AsyncStorage.getItem('scheduleData');
+                    if (cachedData) {
+                        setIsLoading(false);
+                        setScheduleData(JSON.parse(cachedData));
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading cached schedule:', error);
+            }
+        }
+        loadCachedData();
+
+    }, [actualGroupId]);
+
+// Кастомный хук для отслеживания изменений в AsyncStorage
+    useEffect(() => {
+        let isInitialLoad = true;
+
+        const fetchData = async () => {
+            const getData = async () => {
+                try {
+                    const value = await AsyncStorage.getItem('@group_name');
+                    if (value == null && isInitialLoad) {
+                        isInitialLoad = false;
+                        navigation.navigate('StartScreen');
+                    }
+                    return value || null;
+                } catch (e) {
+                    console.error('Error reading data', e);
+                    return null;
+                }
+            };
+
+            const actualGroupName = groupName || await getData();
+
+            if (actualGroupName !== null) {
+                if (intervalIdRef.current !== null) {
+                    clearInterval(intervalIdRef.current);
+                    intervalIdRef.current = null; // Сбрасываем значение ref
+                }
+                console.log(`Загружено расписание ${actualGroupName}`);
+                setData((actualGroupName || "").split(" ")[0] || null);
+                const daysMarginString = await AsyncStorage.getItem('@daysMargin');
+                const daysMargin = daysMarginString ? parseInt(daysMarginString, 10) : 7;
+                const startDate = formatDate(new Date());
+                const endDate = formatDate(addDays(new Date(), daysMargin));
+                const url = `http://services.niu.ranepa.ru/wp-content/plugins/rasp/rasp_json_data.php?user=${actualGroupName}&dstart=${startDate}&dfinish=${endDate}`;
+
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+
+                    let data = await response.json();
+                    const resultKey = isGroup(actualGroupName) ? 'GetRaspGroupResult' : 'GetRaspPrepResult';
+
+                    if (data[resultKey] && data[resultKey].RaspItem) {
+                        const filteredScheduleData = filterPhysicalEducationLessons(data[resultKey].RaspItem);
+                        console.log(filteredScheduleData)
+                        setScheduleData(filterScheduleBySubject('', filteredScheduleData));
+                        try {
+                            await AsyncStorage.setItem('scheduleData', JSON.stringify(data[resultKey].RaspItem));
+                        } catch (error) {
+                            console.error('Error caching schedule data:', error);
+                        }
+                    } else {
+                        console.error("Unexpected data structure");
+                    }
+                } catch (error) {
+                    console.error("An error occurred while fetching data:", error);
+                    // Устанавливаем таймер на 5 секунд перед установкой showNotification в true
+                    setTimeout(() => {
+                        setShowNotification(true);
+                    }, 5000);
+                } finally {
+                    setIsLoading(false);
+                }
+            }
+        }
+        intervalIdRef.current = setInterval(fetchData, 2500) as unknown as number;
+
+        fetchData();
+
+        return () => {
+            if (intervalIdRef.current !== null) {
+                clearInterval(intervalIdRef.current);
+            }
+        };
+    }, [actualGroupId, groupNameContext]);
 
 
-  if (isLoading) {
+    if (isLoading) {
+        return (
+            <View style={styles.centered}>
+                <ActivityIndicator size="large" color="#0000ff" />
+            </View>
+        );
+    }
+
+    function extractLessonType(lessonName: string = " ", nameGroup: string = ""): string | undefined {
+        const lessonTypeMatch = lessonName.match(/\((.*?)\)/);
+        let lessonType = lessonTypeMatch && lessonTypeMatch[1] ? lessonTypeMatch[1] : undefined;
+
+        if (lessonType) {
+            if (lessonType.includes("Практ.") || lessonType.includes("семин.")) {
+                lessonType = "Практика";
+            } else if (lessonType.toLowerCase().includes("лабораторная работа")) {
+                const groupNumber = nameGroup.match(/\d+/);
+                if (groupNumber) {
+                    lessonType = `Лабораторная работа (Группа ${groupNumber[0]})`;
+                } else {
+                    lessonType = "Лабораторная работа";
+                }
+            } else {
+                lessonType = lessonType.charAt(0).toUpperCase() + lessonType.slice(1).toLowerCase();
+            }
+            return lessonType;
+        } else {
+            return undefined;
+        }
+    }
+
+    const handleButtonPress = () => {
+        setEndDate(addDays(new Date(), 7));
+        if (stableSchedule.length === 0) {
+            console.log(`Default schedule : ${scheduleData}`)
+            setStableSchedule(scheduleData);
+            console.log(`Set stable schedule: ${stableSchedule}`)
+        }
+
+        // Используем stableSchedule вместо scheduleData
+        setScheduleData(filterScheduleBySubject(subjectName, stableSchedule));
+        console.log(subjectName, stableSchedule)
+        setModalVisible(false)
+    };
+
+
+    function isGroup(groupName: any) {
+        // Регулярное выражение для поиска чисел в строке
+        const hasNumbers = /\d/;
+
+        // Проверка, содержит ли groupName числа
+        return hasNumbers.test(groupName);
+    }
+
+    function processLessonName(lessonName: string): { teacher: string, lessonInfo: string } {
+        // Разделяем строку по '<br />', чтобы отделить информацию об уроке от имени преподавателя
+        const splitLessonName = lessonName.split('<br />');
+
+        // Убираем все символы, начиная с первой открывающей скобки
+        let lessonInfo = splitLessonName[0].split('(')[0].trim();
+
+        // Получаем имя преподавателя или используем заполнитель, если имя отсутствует
+        const teacher = splitLessonName.length > 1 ? splitLessonName[1].trim() : "";
+
+        return {
+            teacher,
+            lessonInfo
+        };
+    }
+
     return (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#0000ff" />
+        <View style={styles.schedule}>
+            <View style={[styles.headertitleicon, styles.headerTitleIconStyle]}>
+                <View style={[styles.leftAccessory, styles.accessoryFlexBox]}>
+                    <Image
+                        style={styles.backIcon}
+                        contentFit="cover"
+                        source={require("../assets/back-icon.png")}
+                    />
+                    <Text style={[styles.leftTitle, styles.textTypo]}>Расписание</Text>
+                </View>
+                <View style={[styles.title, styles.accessoryFlexBox]}>
+                    {data === "loading" ? (
+                        <ActivityIndicator size="small" color="#0000ff" />
+                    ) : (
+                        <Text style={[styles.text, styles.textTypo]}>{data}</Text>
+                    )}
+
+                </View>
+                <View style={[styles.rightAccessory, styles.accessoryFlexBox]}>
+                    <View style={[styles.iconsleft, styles.accessoryFlexBox]}>
+                        <TouchableOpacity onPress={() => setModalVisible(true)}>
+                            <Image
+                                style={styles.badgecalendarIcon}
+                                contentFit="cover"
+                                source={require("../assets/badgecalendar.png")}
+                            />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+            <ScrollView
+                ref={scrollViewRef}
+                style={{
+                    marginTop: groupName ? 0 : 66, // Устанавливаем marginTop в зависимости от наличия groupName
+                    marginBottom: 75
+                }}        >
+                <>
+                    {showNotification && (
+                        <View style={{ backgroundColor: 'red', padding: 5, alignItems: 'center' }}>
+                            <Text style={{ color: 'white' }}>Не удалось извлечь новые данные с сервера</Text>
+                        </View>
+                    )}
+                </>
+                {!groupName ? null : (
+                    <View style={{ height: 95, backgroundColor: 'white', paddingLeft: 20, paddingTop: 20 }}>
+                        <Text style={[{ marginTop: -10, color: '#007AFF', fontWeight: '800' }, styles.textTypoSearch]}>{isGroup(groupName) ? 'Группа' : 'Преподаватель'}</Text>
+                        <Text style={[{ marginTop: 0, fontWeight: 'bold' }, styles.textTypoSearch]}>{groupName}</Text>
+                        <Text style={[{ marginTop: 0, color: '#8E8E93' }, styles.textTypoSearch]}>{isGroup(groupName) ? 'Информация о группе' : 'Информация о преподавателе'}</Text>
+                    </View>
+                )}
+                {Object.entries(groupedScheduleData).length > 0 ? (
+                    Object.entries(groupedScheduleData).map(([date, lessonsForTheDay], index) => (
+                        <React.Fragment key={index}>
+                            <TableSubheadings noteTitle={formatHumanReadableDate(date)} />
+
+                            {/* Выводим уроки за день */}
+                            {lessonsForTheDay.map((lesson, lessonIndex) => {
+                                // Трансформируем данные урока перед их использованием
+                                return (
+                                    <LessonCard
+                                        key={lessonIndex}
+                                        prop={lesson.timestart}
+                                        prop1={lesson.timefinish}
+                                        prop2={extractLessonType(lesson.name, lesson.namegroup)}
+                                        preMedi={processLessonName(lesson.name).lessonInfo}
+                                        teacherName={processLessonName(lesson.name).teacher}
+                                        prop3={
+                                            (() => {
+                                                const roomInfo = getAddressAndRoom(lesson.aydit);
+                                                if (roomInfo.isRemote) {
+                                                    return <Text>{roomInfo.address}</Text>;
+                                                } else {
+                                                    return (
+                                                        <Text>
+                                                            Аудитория <Text style={{fontWeight: 'bold'}}>{roomInfo.roomNumber}</Text>, {roomInfo.address}
+                                                        </Text>
+                                                    );
+                                                }
+                                            })()
+                                        }
+                                        showBg={false}
+                                        showBg1={false}
+                                        subjectName={subjectName}
+                                    />
+                                );
+                            })}
+                        </React.Fragment>
+                    ))
+                ) : (
+                    <View style={styles.noDataContainer}>
+                        <Text style={styles.noDataText}>
+                            Расписания за указанный период не найдено.
+                        </Text>
+                    </View>
+                )}
+                {Object.entries(groupedScheduleData).length > 0 && (
+                    <View
+                        onLayout={(event) => {
+                            const layout = event.nativeEvent.layout;
+                            setLoadMoreButtonPosition(layout.y);
+                        }}
+                    >
+                        {!showNotification && <TouchableOpacity
+                            onPress={loadMoreData}
+                            disabled={isFetchingMore}
+                            style={styles.button}
+                        >
+                            <View style={styles.buttoncontainer}>
+                                {isFetchingMore
+                                    ? <ActivityIndicator color="white"/>
+                                    : <Text style={styles.buttontext}>ЗАГРУЗИТЬ ЕЩЕ</Text>
+                                }
+                            </View>
+                        </TouchableOpacity>}
+                    </View>
+                )}
+            </ScrollView>
+            <TabBar
+                imageDimensions={require("../assets/briefcaseGray.png")}
+                tabBarPosition="absolute"
+                tabBarTop={734}
+                tabBarLeft={0}
+                textColor="#007aff"
+                tabBarWidth={400}
+                tabBarHeight={75}
+            />
+            <Modal
+                isVisible={modalVisible}
+                onSwipeComplete={() => setModalVisible(false)}
+                swipeDirection={['down']}
+                style={styles.modal}
+                onBackdropPress={() => setModalVisible(false)} // закрыть модальное окно при нажатии вне его
+            >
+                <View style={styles.headerBar}></View>
+                <View style={styles.modalContent}>
+                    <Text style={styles.headerText}>Установка фильтра</Text>
+                    <Text style={styles.instructionText}>
+                        Можете установить фильтр по отображаемым предметам, выбрать диапазон показа расписания
+                    </Text>
+                    {error && <Text style={{color: 'red'}}>{error}</Text>}
+
+                    <View style={styles.inputContainer}>
+                        <TextInput
+                            ref={inputRef}
+                            style={styles.input}
+                            onChangeText={(text) => {
+                                setSubjectName(text);
+                            }}
+                            value={subjectName}
+                            placeholder={subjectName.length === 0 ? 'Название предмета' : ''}
+                        />
+
+                        <TouchableOpacity onPress={() => setSubjectName('')}>
+                            <Image
+                                style={styles.sfSymbolXmarkcirclefill}
+                                source={require("../assets/sf-symbol--xmarkcirclefill.png")}
+                            />
+                        </TouchableOpacity>
+                    </View>
+
+
+                    <TouchableOpacity
+                        style={styles.closeButton}
+                        disabled={loading}
+                        onPress={handleButtonPress}
+                    >
+                        {loading ? (
+                            <ActivityIndicator size="small" color="#0000ff" />
+                        ) : (
+                            <Text style={styles.textStyle}>Установить</Text>
+                        )}
+                    </TouchableOpacity>
+                </View>
+            </Modal>
         </View>
     );
-  }
-
-  function extractLessonType(lessonName: string = " ", nameGroup: string = ""): string | undefined {
-    const lessonTypeMatch = lessonName.match(/\((.*?)\)/);
-    let lessonType = lessonTypeMatch && lessonTypeMatch[1] ? lessonTypeMatch[1] : undefined;
-  
-    if (lessonType) {
-      if (lessonType.includes("Практ.") || lessonType.includes("семин.")) {
-        lessonType = "Практика";
-      } else if (lessonType.toLowerCase().includes("лабораторная работа")) {
-        const groupNumber = nameGroup.match(/\d+/); 
-        if (groupNumber) {
-          lessonType = `Лабораторная работа (Группа ${groupNumber[0]})`;
-        } else {
-          lessonType = "Лабораторная работа";
-        }
-      } else {
-        lessonType = lessonType.charAt(0).toUpperCase() + lessonType.slice(1).toLowerCase();
-      }
-      return lessonType;
-    } else {
-      return undefined;
-    }
-  }
-  
-  
-
-  const handleButtonPress = () => {
-    setEndDate(addDays(new Date(), 7));
-    if (stableSchedule.length === 0) {
-      console.log(`Default schedule : ${scheduleData}`)
-      setStableSchedule(scheduleData);
-      console.log(`Set stable schedule: ${stableSchedule}`)
-    }
-
-    // Используем stableSchedule вместо scheduleData
-    setScheduleData(filterScheduleBySubject(subjectName, stableSchedule));
-    console.log(subjectName, stableSchedule)
-    setModalVisible(false)
-  };
-
-
-  function isGroup(groupName: any) {
-    // Регулярное выражение для поиска чисел в строке
-    const hasNumbers = /\d/;
-
-    // Проверка, содержит ли groupName числа
-    return hasNumbers.test(groupName);
-  }
-
-  function processLessonName(lessonName: string): { teacher: string, lessonInfo: string } {
-    // Разделяем строку по '<br />', чтобы отделить информацию об уроке от имени преподавателя
-    const splitLessonName = lessonName.split('<br />');
-
-    // Убираем все символы, начиная с первой открывающей скобки
-    let lessonInfo = splitLessonName[0].split('(')[0].trim();
-
-    // Получаем имя преподавателя или используем заполнитель, если имя отсутствует
-    const teacher = splitLessonName.length > 1 ? splitLessonName[1].trim() : "";
-
-    return {
-      teacher,
-      lessonInfo
-    };
-  }
-  const handleUpdatePress = () => {
-    console.log(updateUrl)
-    if (updateUrl) {
-      Linking.openURL(updateUrl).catch(err => console.error('Ошибка при открытии URL:', err));
-    }
-  };
-
-  return (
-      <View style={styles.schedule}>
-        <View style={[styles.headertitleicon, styles.headerTitleIconStyle]}>
-          <View style={[styles.leftAccessory, styles.accessoryFlexBox]}>
-            <Image
-                style={styles.backIcon}
-                contentFit="cover"
-                source={require("../assets/back-icon.png")}
-            />
-            <Text style={[styles.leftTitle, styles.textTypo]}>Расписание</Text>
-          </View>
-          <View style={[styles.title, styles.accessoryFlexBox]}>
-            {data === "loading" ? (
-                <ActivityIndicator size="small" color="#0000ff" />
-            ) : (
-                <Text style={[styles.text, styles.textTypo]}>{data}</Text>
-            )}
-
-          </View>
-          <View style={[styles.rightAccessory, styles.accessoryFlexBox]}>
-            <View style={[styles.iconsleft, styles.accessoryFlexBox]}>
-              <TouchableOpacity onPress={() => setModalVisible(true)}>
-                <Image
-                    style={styles.badgecalendarIcon}
-                    contentFit="cover"
-                    source={require("../assets/badgecalendar.png")}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-        <ScrollView
-            ref={scrollViewRef}
-            style={{
-              marginTop: groupName ? 0 : 66, // Устанавливаем marginTop в зависимости от наличия groupName
-              marginBottom: 75
-            }}        >
-          <>
-            {showUpdate && (
-                <TouchableOpacity onPress={handleUpdatePress}>
-                  <View style={{backgroundColor: '#6FBA8F', padding: 5, alignItems: 'center', height: 30}}>
-                    <Text style={{color: '#F8FCFA'}}>Доступно обновление. Нажмите чтобы установить</Text>
-                  </View>
-                </TouchableOpacity>
-            )}
-            {showNotification && (
-                <View style={{ backgroundColor: 'red', padding: 5, alignItems: 'center' }}>
-                  <Text style={{ color: 'white' }}>Не удалось извлечь новые данные с сервера</Text>
-                </View>
-            )}
-          </>
-          {!groupName ? null : (
-              <View style={{ height: 95, backgroundColor: 'white', paddingLeft: 20, paddingTop: 20 }}>
-                <Text style={[{ marginTop: -10, color: '#007AFF', fontWeight: '800' }, styles.textTypoSearch]}>{isGroup(groupName) ? 'Группа' : 'Преподаватель'}</Text>
-                <Text style={[{ marginTop: 0, fontWeight: 'bold' }, styles.textTypoSearch]}>{groupName}</Text>
-                <Text style={[{ marginTop: 0, color: '#8E8E93' }, styles.textTypoSearch]}>{isGroup(groupName) ? 'Информация о группе' : 'Информация о преподавателе'}</Text>
-              </View>
-          )}
-          {Object.entries(groupedScheduleData).length > 0 ? (
-              Object.entries(groupedScheduleData).map(([date, lessonsForTheDay], index) => (
-                  <React.Fragment key={index}>
-                    <TableSubheadings noteTitle={formatHumanReadableDate(date)} />
-
-                    {/* Выводим уроки за день */}
-                    {lessonsForTheDay.map((lesson, lessonIndex) => {
-                      // Трансформируем данные урока перед их использованием
-                      return (
-                          <LessonCard
-                              key={lessonIndex}
-                              prop={lesson.timestart}
-                              prop1={lesson.timefinish}
-                              prop2={extractLessonType(lesson.name, lesson.namegroup)}
-                              preMedi={processLessonName(lesson.name).lessonInfo}
-                              teacherName={processLessonName(lesson.name).teacher}
-                              prop3={
-                                <Text>
-                                  Аудитория <Text style={{fontWeight: 'bold'}}>{getAddressAndRoom(lesson.aydit).roomNumber}</Text>, {getAddressAndRoom(lesson.aydit).address}
-                                </Text>
-                              }
-                              showBg={false}
-                              showBg1={false}
-                              subjectName={subjectName}
-                          />
-                      );
-                    })}
-                  </React.Fragment>
-              ))
-          ) : (
-              <View style={styles.noDataContainer}>
-                <Text style={styles.noDataText}>
-                  Расписания за указанный период не найдено.
-                </Text>
-              </View>
-          )}
-          {Object.entries(groupedScheduleData).length > 0 && (
-              <View
-                  onLayout={(event) => {
-                    const layout = event.nativeEvent.layout;
-                    setLoadMoreButtonPosition(layout.y);
-                  }}
-              >
-                {!showNotification && <TouchableOpacity
-                    onPress={loadMoreData}
-                    disabled={isFetchingMore}
-                    style={styles.button}
-                >
-                  <View style={styles.buttoncontainer}>
-                    {isFetchingMore
-                        ? <ActivityIndicator color="white"/>
-                        : <Text style={styles.buttontext}>ЗАГРУЗИТЬ ЕЩЕ</Text>
-                    }
-                  </View>
-                </TouchableOpacity>}
-              </View>
-          )}
-        </ScrollView>
-        <TabBar
-            imageDimensions={require("../assets/briefcaseGray.png")}
-            tabBarPosition="absolute"
-            tabBarTop={734}
-            tabBarLeft={0}
-            textColor="#007aff"
-            tabBarWidth={400}
-            tabBarHeight={75}
-        />
-        <Modal
-            isVisible={modalVisible}
-            onSwipeComplete={() => setModalVisible(false)}
-            swipeDirection={['down']}
-            style={styles.modal}
-            onBackdropPress={() => setModalVisible(false)} // закрыть модальное окно при нажатии вне его
-        >
-          <View style={styles.headerBar}></View>
-          <View style={styles.modalContent}>
-            <Text style={styles.headerText}>Установка фильтра</Text>
-            <Text style={styles.instructionText}>
-              Можете установить фильтр по отображаемым предметам, выбрать диапазон показа расписания
-            </Text>
-            {error && <Text style={{color: 'red'}}>{error}</Text>}
-
-            <View style={styles.inputContainer}>
-              <TextInput
-                  ref={inputRef}
-                  style={styles.input}
-                  onChangeText={(text) => {
-                    setSubjectName(text);
-                  }}
-                  value={subjectName}
-                  placeholder={subjectName.length === 0 ? 'Название предмета' : ''}
-              />
-
-              <TouchableOpacity onPress={() => setSubjectName('')}>
-                <Image
-                    style={styles.sfSymbolXmarkcirclefill}
-                    source={require("../assets/sf-symbol--xmarkcirclefill.png")}
-                />
-              </TouchableOpacity>
-            </View>
-
-
-            <TouchableOpacity
-                style={styles.closeButton}
-                disabled={loading}
-                onPress={handleButtonPress}
-            >
-              {loading ? (
-                  <ActivityIndicator size="small" color="#0000ff" />
-              ) : (
-                  <Text style={styles.textStyle}>Установить</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </Modal>
-      </View>
-  );
 };
 
 const styles = StyleSheet.create({
